@@ -1,0 +1,9 @@
+{
+  "name": "standblatt-generator",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests.js",
+    "serve": "npx --yes serve ."
+  }
+}

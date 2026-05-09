@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>RangeOffice</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="stylesheet" href="styles.css">
+    <script src="JsBarcode.all.min.js"></script>
+</head>
+<body>
+
+<div id="ui-wrapper">
+    <div class="tabs">
+        <button class="tab-btn active" id="tab-data"     onclick="Tabs.switch('data')"     data-i18n="tab.participants">Participants</button>
+        <button class="tab-btn"        id="tab-settings" onclick="Tabs.switch('settings')" data-i18n="tab.settings">Settings</button>
+    </div>
+
+    <div id="data-view" class="card">
+        <div class="toolbar">
+            <button class="btn-action toolbar-btn" id="btn-toolbar-print"    onclick="Printing.labels()"></button>
+            <button class="btn-action toolbar-btn" id="btn-toolbar-download" onclick="CsvIO.download()"></button>
+            <button class="btn-action toolbar-btn" id="btn-toolbar-copy"     onclick="CsvIO.copy()"></button>
+            <button class="btn-secondary toolbar-btn" id="btn-toolbar-delete" onclick="Participants.deleteSelected()"></button>
+            <input type="search" id="filter-input" class="filter-input" oninput="Filter.apply()" data-i18n-placeholder="placeholder.filter">
+        </div>
+        <div class="table-scroll">
+        <table class="participants-table">
+            <thead>
+                <tr>
+                    <th width="36"><input type="checkbox" id="master-check" onclick="Selection.toggleAll()"></th>
+                    <th width="160" data-col="license" data-i18n="col.licenseNumber">License no.</th>
+                    <th data-i18n="col.lastName">Last name</th>
+                    <th data-i18n="col.firstName">First name</th>
+                    <th width="160" data-i18n="col.yearOfBirth">Year of birth</th>
+                    <th data-col="custom1"></th>
+                    <th data-col="custom2"></th>
+                    <th width="92" data-i18n="col.actions">Action</th>
+                </tr>
+            </thead>
+            <tbody id="participants-tbody"></tbody>
+        </table>
+        </div>
+    </div>
+
+    <div id="settings-view" class="card hidden">
+        <div class="lang-bar">
+            <label for="language-select" data-i18n="settings.language">Language</label>
+            <select id="language-select">
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+            </select>
+        </div>
+
+        <section class="settings-section">
+            <h3 data-i18n="settings.eventBranding">Event</h3>
+            <div class="settings-grid">
+                <div>
+                    <label data-i18n="settings.eventName">Name</label>
+                    <input type="text" id="event-name-input" oninput="Settings.save()">
+                </div>
+                <div>
+                    <label data-i18n="settings.logo">Logo</label>
+                    <input type="file" accept="image/*" onchange="Logo.loadFrom(this)">
+                    <div id="logo-preview-wrap">
+                        <img id="logo-preview" style="max-width:120px; display:none; margin-top:10px;">
+                        <button class="btn-danger-ghost" id="clear-logo-button" onclick="Logo.clear()" style="display:none; margin-top:6px;" data-i18n="btn.removeLogo">Remove</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <hr>
+
+        <section class="settings-section">
+            <h3 data-i18n="settings.columns">Columns</h3>
+            <div class="settings-grid">
+                <div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="license-enabled-input" onchange="Settings.save()">
+                        <span data-i18n="settings.licenseEnabled">Capture license number</span>
+                    </label>
+                </div>
+            </div>
+            <div class="settings-grid" style="margin-top:14px">
+                <div>
+                    <label data-i18n="settings.customColumn1">Custom column 1</label>
+                    <input type="text" id="custom-column-1-input" oninput="Settings.save()" data-i18n-placeholder="placeholder.columnName">
+                </div>
+                <div>
+                    <label data-i18n="settings.customColumn2">Custom column 2</label>
+                    <input type="text" id="custom-column-2-input" oninput="Settings.save()" data-i18n-placeholder="placeholder.columnName">
+                </div>
+            </div>
+        </section>
+
+        <hr>
+
+        <section class="settings-section">
+            <h3 data-i18n="settings.barcodes">Barcode</h3>
+            <h4 data-i18n="settings.participantBarcode">Participant barcode</h4>
+            <div class="settings-grid settings-grid-3">
+                <div>
+                    <label data-i18n="settings.prefix">Prefix</label>
+                    <input type="number" id="participant-prefix-input" oninput="Settings.save()">
+                </div>
+            </div>
+            <h4 style="margin-top:20px" data-i18n="settings.programBarcode">Program barcode</h4>
+            <div class="settings-grid settings-grid-3">
+                <div>
+                    <label data-i18n="settings.programPrefix">Prefix (2 digits)</label>
+                    <input type="text" id="program-prefix-input"  oninput="Settings.save()" maxlength="2">
+                </div>
+                <div>
+                    <label data-i18n="settings.rankingCode">Ranking code</label>
+                    <input type="text" id="ranking-code-input" oninput="Settings.save()" maxlength="3">
+                </div>
+                <div>
+                    <label data-i18n="settings.targetCode">Target code</label>
+                    <input type="text" id="target-code-input"  oninput="Settings.save()" maxlength="3">
+                </div>
+            </div>
+        </section>
+
+        <hr>
+
+        <div class="settings-footer">
+            <button class="btn-secondary" onclick="Backup.export()" data-i18n="btn.exportBackup">Export event</button>
+            <button class="btn-secondary" onclick="document.getElementById('import-file-input').click()" data-i18n="btn.importBackup">Import event</button>
+            <input type="file" id="import-file-input" hidden accept=".rangeoffice" onchange="Backup.import(this)">
+            <button class="btn-neutral" onclick="document.getElementById('import-csv-input').click()" data-i18n="btn.importCsv">Import CSV</button>
+            <input type="file" id="import-csv-input" hidden accept=".csv,text/csv" onchange="CsvIO.import(this)">
+            <button class="btn-danger-ghost clear-all" onclick="Backup.clearAll()" data-i18n="btn.clearAll">Clear all data</button>
+        </div>
+
+        <p class="settings-about">
+            <span data-i18n="about.line1">This software is free and open source.</span>
+            <span data-i18n="about.line2">Contribute, report bugs or share ideas:</span>
+            <a href="https://github.com/schiesssport/range-office" target="_blank" rel="noopener" data-i18n="about.linkLabel">Project on GitHub</a>
+        </p>
+    </div>
+</div>
+
+<div id="print-container"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
