@@ -64,9 +64,10 @@ Two Code128 barcodes per label, both with a `mod-97` (`-3n mod 97`) checksum:
 |---|---|
 | `index.html` | Markup only; UI structure and `data-i18n` hooks |
 | `styles.css` | All styling, including the print stylesheet for the label sheets |
-| `app.js` | Application logic (translations, settings, table, barcode, print, CSV, backup, service worker) |
+| `app.js` | Application logic (translations, settings, table, barcode, print, CSV, backup, update prompt) |
 | `core.js` | Pure logic shared by app and tests (translations, schema, barcode helpers) |
 | `tests.js` | Node test suite for `core.js` |
+| `sw.js` | Service worker — offline cache + `SKIP_WAITING` handler (bump `CACHE_NAME` to ship a new version) |
 | `JsBarcode.all.min.js` | Vendored barcode library (no CDN needed) |
 | `manifest.webmanifest` | PWA manifest |
 | `icon.svg` | App icon |
@@ -79,7 +80,7 @@ Three top-level `localStorage` keys, each a JSON-encoded versioned wrapper:
 |---|---|
 | `settings`     | `{ version, data: { eventName, eventLogo, participantPrefix, programPrefix, rankingCode, targetCode, licenseEnabled, customColumn1Name, customColumn2Name } }` |
 | `participants` | `{ version, items: [ {license, lastName, firstName, yearOfBirth, custom1, custom2}, ... ] }` |
-| `userSettings` | `{ language }` — local user preferences, **not** part of an event export |
+| `userSettings` | `{ language, updateDeferUntil }` — local user preferences, **not** part of an event export |
 
 The exported `.rangeoffice` file mirrors `settings` + `participants` exactly. Section versions are `Major.Minor`; an incompatible major aborts the import (a registry-based migration framework is in place for future major bumps).
 

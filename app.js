@@ -16,6 +16,8 @@ import {
     parseCsv,
     detectSeparator,
     matchHeaderKey,
+    computeDeferUntil,
+    isUpdatePromptDue,
 } from './core.js';
 
 const $  = (id) => document.getElementById(id);
@@ -29,12 +31,62 @@ const triggerDownload = (filename, blob) => {
 };
 
 // -----------------------------------------------------------------------------
+// Local storage migration (runs on every boot)
+//
+// Each registry maps OLD major version → migrator that takes the current
+// wrapper ({version, data} or {version, items}) and returns the next major's
+// wrapper. Fresh installs (wrapper absent) skip the migration entirely.
+// -----------------------------------------------------------------------------
+
+class Migrations {
+    static settings     = {};
+    static participants = {};
+
+    static run() {
+        Migrations.runOne('settings',     Backup.SETTINGS_VERSION,     Migrations.settings);
+        Migrations.runOne('participants', Backup.PARTICIPANTS_VERSION, Migrations.participants);
+    }
+
+    static runOne(storageKey, currentVersion, registry) {
+        const raw = localStorage.getItem(storageKey);
+        if (raw === null) return;
+        let wrapper;
+        try { wrapper = JSON.parse(raw); } catch (_) { return; }
+        let from = Backup.majorOf(wrapper.version);
+        const to = Backup.majorOf(currentVersion);
+        while (from < to) {
+            const step = registry[from];
+            if (step) wrapper = step(wrapper);
+            from++;
+        }
+        wrapper.version = currentVersion;
+        localStorage.setItem(storageKey, JSON.stringify(wrapper));
+    }
+}
+
+// -----------------------------------------------------------------------------
+// User settings — local-only preferences, NOT part of an event export
+// -----------------------------------------------------------------------------
+
+class UserSettings {
+    static read() {
+        try { return JSON.parse(localStorage.getItem('userSettings') || '{}'); }
+        catch (_) { return {}; }
+    }
+
+    static patch(values) {
+        const merged = { ...UserSettings.read(), ...values };
+        localStorage.setItem('userSettings', JSON.stringify(merged));
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Translations
 // -----------------------------------------------------------------------------
 
 class Translations {
     static getLanguage() {
-        const stored = localStorage.getItem('appLanguage');
+        const stored = UserSettings.read().language;
         return TRANSLATIONS[stored] ? stored : DEFAULT_LANGUAGE;
     }
 
@@ -51,47 +103,9 @@ class Translations {
 
     static set(lang) {
         if (!TRANSLATIONS[lang]) return;
-        localStorage.setItem('appLanguage', lang);
+        UserSettings.patch({ language: lang });
         Translations.apply();
         Participants.refreshDynamicTexts();
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Local storage migration (when the app code is newer than the persisted data)
-// -----------------------------------------------------------------------------
-
-class Migrations {
-    // Migrators are keyed by the OLD major version stored in localStorage.
-    // Each step mutates localStorage in-place, taking it from major N to N+1.
-    // Example:
-    //   Migrations.settings[1] = () => {
-    //       const v = localStorage.getItem('oldKey');
-    //       if (v !== null) { localStorage.setItem('newKey', v); localStorage.removeItem('oldKey'); }
-    //   };
-    static settings     = {};
-    static participants = {};
-
-    static run() {
-        Migrations.runOne('settingsVersion',     Backup.SETTINGS_VERSION,     Migrations.settings);
-        Migrations.runOne('participantsVersion', Backup.PARTICIPANTS_VERSION, Migrations.participants);
-    }
-
-    static runOne(versionKey, currentVersion, registry) {
-        const stored = localStorage.getItem(versionKey);
-        if (stored === null) {
-            // Fresh install: just stamp the current version.
-            localStorage.setItem(versionKey, currentVersion);
-            return;
-        }
-        let from = Backup.majorOf(stored);
-        const to = Backup.majorOf(currentVersion);
-        while (from < to) {
-            const step = registry[from];
-            if (step) step();
-            from++;
-        }
-        localStorage.setItem(versionKey, currentVersion);
     }
 }
 
@@ -113,23 +127,45 @@ class Settings {
 
     static BY_KEY = Object.fromEntries(Settings.BINDINGS.map(b => [b.storageKey, b]));
 
+    // Read the {version, data} wrapper. Returns the data object, or {} if absent
+    // or version-incompatible.
+    static readData() {
+        try {
+            const raw = localStorage.getItem('settings');
+            if (!raw) return {};
+            const wrapper = JSON.parse(raw);
+            if (Backup.majorOf(wrapper.version) !== Backup.majorOf(Backup.SETTINGS_VERSION)) return {};
+            return wrapper.data || {};
+        } catch (_) { return {}; }
+    }
+
+    static writeData(data) {
+        localStorage.setItem('settings', JSON.stringify({
+            version: Backup.SETTINGS_VERSION,
+            data,
+        }));
+    }
+
     static load() {
+        const data = Settings.readData();
         Settings.BINDINGS.forEach(({ storageKey, elementId, type, defaultValue }) => {
             const el = $(elementId);
-            const stored = localStorage.getItem(storageKey);
+            const value = data[storageKey];
             if (type === 'checkbox') {
-                el.checked = stored === null ? !!defaultValue : stored === 'true';
+                el.checked = value === undefined ? !!defaultValue : !!value;
             } else {
-                el.value = stored ?? defaultValue;
+                el.value = value ?? defaultValue;
             }
         });
     }
 
     static save() {
+        const data = Settings.readData();
         Settings.BINDINGS.forEach(({ storageKey, elementId, type }) => {
             const el = $(elementId);
-            localStorage.setItem(storageKey, type === 'checkbox' ? String(el.checked) : el.value);
+            data[storageKey] = type === 'checkbox' ? el.checked : el.value;
         });
+        Settings.writeData(data);
         Participants.applyColumnVisibility();
     }
 
@@ -139,6 +175,17 @@ class Settings {
         if (binding.type === 'checkbox') return el.checked;
         return el.value || binding.defaultValue;
     }
+
+    // For non-form settings (eventLogo)
+    static getRaw(key) {
+        return Settings.readData()[key];
+    }
+
+    static setRaw(key, value) {
+        const data = Settings.readData();
+        data[key] = value;
+        Settings.writeData(data);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -146,31 +193,28 @@ class Settings {
 // -----------------------------------------------------------------------------
 
 class Logo {
-    static data = localStorage.getItem('eventLogo') || '';
-
     static loadFrom(input) {
         if (!input.files[0]) return;
         const reader = new FileReader();
         reader.onload = (e) => {
-            Logo.data = e.target.result;
-            localStorage.setItem('eventLogo', Logo.data);
+            Settings.setRaw('eventLogo', e.target.result);
             Logo.updatePreview();
         };
         reader.readAsDataURL(input.files[0]);
     }
 
     static clear() {
-        Logo.data = '';
-        localStorage.removeItem('eventLogo');
+        Settings.setRaw('eventLogo', '');
         Logo.updatePreview();
     }
 
     static updatePreview() {
+        const dataUrl = Settings.getRaw('eventLogo') || '';
         const img = $('logo-preview');
         const btn = $('clear-logo-button');
-        img.src = Logo.data;
-        img.style.display = Logo.data ? 'block' : 'none';
-        btn.style.display = Logo.data ? 'inline-block' : 'none';
+        img.src = dataUrl;
+        img.style.display = dataUrl ? 'block' : 'none';
+        btn.style.display = dataUrl ? 'inline-block' : 'none';
     }
 }
 
@@ -399,10 +443,23 @@ class Participants {
     }
 
     static save() {
-        const rows = [...$$('#participants-tbody tr:not(.empty-row)')]
+        const items = [...$$('#participants-tbody tr:not(.empty-row)')]
             .map(Participants.readRow)
             .filter(p => p.lastName.trim() !== '');
-        localStorage.setItem('participants', JSON.stringify(rows));
+        localStorage.setItem('participants', JSON.stringify({
+            version: Backup.PARTICIPANTS_VERSION,
+            items,
+        }));
+    }
+
+    static loadStored() {
+        try {
+            const raw = localStorage.getItem('participants');
+            if (!raw) return [];
+            const wrapper = JSON.parse(raw);
+            if (Backup.majorOf(wrapper.version) !== Backup.majorOf(Backup.PARTICIPANTS_VERSION)) return [];
+            return Array.isArray(wrapper.items) ? wrapper.items : [];
+        } catch (_) { return []; }
     }
 
     static handleChanged() {
@@ -645,8 +702,9 @@ class Printing {
         if (!rows.length) return;
 
         const eventName = Settings.get('eventName');
-        const logoHtml = Logo.data
-            ? `<div class="label-logo"><img src="${escapeHtml(Logo.data)}" class="label-logo-img"></div>`
+        const logoUrl   = Settings.getRaw('eventLogo') || '';
+        const logoHtml  = logoUrl
+            ? `<div class="label-logo"><img src="${escapeHtml(logoUrl)}" class="label-logo-img"></div>`
             : '';
         const programCode = Barcodes.programCode();
         const programImg  = programCode ? Barcodes.render(programCode) : null;
@@ -689,20 +747,24 @@ class Backup {
         }
     }
 
+    static readWrapper(storageKey, currentVersion, payloadKey, emptyPayload) {
+        try {
+            const raw = localStorage.getItem(storageKey);
+            if (!raw) return { version: currentVersion, [payloadKey]: emptyPayload };
+            const wrapper = JSON.parse(raw);
+            return {
+                version: wrapper.version,
+                [payloadKey]: wrapper[payloadKey] ?? emptyPayload,
+            };
+        } catch (_) {
+            return { version: currentVersion, [payloadKey]: emptyPayload };
+        }
+    }
+
     static export() {
-        const settingsData = Object.fromEntries(
-            Settings.BINDINGS.map(({ storageKey }) => [storageKey, localStorage.getItem(storageKey)])
-        );
         const data = {
-            settings: {
-                version: Backup.SETTINGS_VERSION,
-                data: settingsData,
-            },
-            participants: {
-                version: Backup.PARTICIPANTS_VERSION,
-                items: JSON.parse(localStorage.getItem('participants') || '[]'),
-            },
-            logo: Logo.data,
+            settings:     Backup.readWrapper('settings',     Backup.SETTINGS_VERSION,     'data',  {}),
+            participants: Backup.readWrapper('participants', Backup.PARTICIPANTS_VERSION, 'items', []),
         };
         const slug = (Settings.get('eventName') || 'event')
             .toLowerCase()
@@ -725,15 +787,17 @@ class Backup {
 
                 if (data.settings && data.settings.data) {
                     Backup.assertCompatibleMajor(data.settings.version, Backup.SETTINGS_VERSION, 'settings');
-                    Object.entries(data.settings.data).forEach(([k, v]) => localStorage.setItem(k, v ?? ''));
+                    localStorage.setItem('settings', JSON.stringify({
+                        version: data.settings.version,
+                        data: data.settings.data,
+                    }));
                 }
                 if (data.participants && Array.isArray(data.participants.items)) {
                     Backup.assertCompatibleMajor(data.participants.version, Backup.PARTICIPANTS_VERSION, 'participants');
-                    localStorage.setItem('participants', JSON.stringify(data.participants.items));
-                }
-                if (data.logo !== undefined) {
-                    Logo.data = data.logo;
-                    localStorage.setItem('eventLogo', Logo.data);
+                    localStorage.setItem('participants', JSON.stringify({
+                        version: data.participants.version,
+                        items: data.participants.items,
+                    }));
                 }
                 location.reload();
             } catch (err) {
@@ -746,31 +810,91 @@ class Backup {
 
     static clearAll() {
         if (!confirm(Translations.t('confirm.clearAll'))) return;
-        const lang = Translations.getLanguage();
+        const userPrefs = UserSettings.read();
         localStorage.clear();
-        localStorage.setItem('appLanguage', lang);
+        UserSettings.patch(userPrefs); // preserve language and any future user prefs
         sessionStorage.setItem('openSettingsOnLoad', '1');
         location.reload();
     }
 }
 
 // -----------------------------------------------------------------------------
-// Service worker (offline / installable PWA)
+// Service worker registration + update prompt
+//
+// A waiting SW means the browser has fetched a new sw.js and installed it,
+// but the old one is still controlling the page. We ask the user before
+// taking the new one — useful during a live event where reloads are costly.
+// "Cancel" defers the prompt for DEFER_DAYS; the user can also force a check
+// from settings (which clears the defer first).
 // -----------------------------------------------------------------------------
+
+class Updates {
+    static DEFER_DAYS = 2;
+    static promptOpen = false;
+
+    static deferUpdates() {
+        UserSettings.patch({ updateDeferUntil: computeDeferUntil(Date.now(), Updates.DEFER_DAYS) });
+    }
+
+    static promptAndApply(waitingWorker) {
+        if (Updates.promptOpen) return;
+        if (!isUpdatePromptDue(UserSettings.read().updateDeferUntil, Date.now())) return;
+        Updates.promptOpen = true;
+        try {
+            if (confirm(Translations.t('update.confirmNow'))) {
+                navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
+                waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+            } else {
+                Updates.deferUpdates();
+            }
+        } finally {
+            Updates.promptOpen = false;
+        }
+    }
+
+    static watch(registration) {
+        const considerWorker = (worker) => {
+            if (!worker) return;
+            const check = () => {
+                if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                    Updates.promptAndApply(worker);
+                }
+            };
+            check();
+            worker.addEventListener('statechange', check);
+        };
+        considerWorker(registration.waiting);
+        registration.addEventListener('updatefound', () => considerWorker(registration.installing));
+    }
+
+    static async checkNow() {
+        if (!('serviceWorker' in navigator)) {
+            alert(Translations.t('update.checkFailed'));
+            return;
+        }
+        try {
+            UserSettings.patch({ updateDeferUntil: 0 });
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (!registration) { alert(Translations.t('update.checkFailed')); return; }
+            await registration.update();
+            if (registration.waiting) {
+                Updates.promptAndApply(registration.waiting);
+            } else if (!registration.installing) {
+                alert(Translations.t('update.upToDate'));
+            }
+            // installing case: the statechange listener installed by watch()
+            // will run promptAndApply once it transitions to 'installed'.
+        } catch (_) {
+            alert(Translations.t('update.checkFailed'));
+        }
+    }
+}
 
 const registerServiceWorker = () => {
     if (!('serviceWorker' in navigator)) return;
-    const swCode = `
-        const CACHE_NAME = 'standblatt-v9';
-        const ASSETS = [location.href, 'app.js', 'core.js', 'styles.css', 'JsBarcode.all.min.js', 'manifest.webmanifest', 'icon.svg'];
-        self.addEventListener('install',  e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS))));
-        self.addEventListener('activate', e => e.waitUntil(caches.keys().then(keys =>
-            Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-        )));
-        self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
-    `;
-    const blob = new Blob([swCode], { type: 'application/javascript' });
-    navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+    navigator.serviceWorker.register('sw.js')
+        .then((registration) => Updates.watch(registration))
+        .catch(() => {});
 };
 
 // -----------------------------------------------------------------------------
@@ -792,8 +916,7 @@ class App {
         App.populateLanguageSelector();
         Logo.updatePreview();
 
-        const saved = JSON.parse(localStorage.getItem('participants') || '[]');
-        saved.forEach(Participants.addRow);
+        Participants.loadStored().forEach(Participants.addRow);
         Participants.addRow(); // trailing empty row
         Toolbar.updateLabels();
 
@@ -820,5 +943,5 @@ document.addEventListener('DOMContentLoaded', App.init);
 // Expose classes for inline HTML handlers (onclick / oninput / onchange).
 Object.assign(window, {
     Translations, Settings, Logo, Tabs, Categories, Barcodes,
-    Participants, Selection, Filter, Toolbar, CsvIO, Backup, Printing,
+    Participants, Selection, Filter, Toolbar, CsvIO, Backup, Printing, Updates,
 });

@@ -83,6 +83,10 @@ export const TRANSLATIONS = {
         'about.line1':              'Diese Software ist kostenlos und Open Source – entwickelt für die Schweizer Schützenvereine.',
         'about.line2':              'Mithelfen, Fehler melden oder Ideen einbringen:',
         'about.linkLabel':          'Projekt auf GitHub',
+        'btn.checkUpdate':          'Auf Updates prüfen',
+        'update.confirmNow':        'Eine neue Version ist verfügbar. Jetzt aktualisieren?\n\nAbbrechen, um in 2 Tagen erneut zu fragen.',
+        'update.upToDate':          'Du verwendest bereits die neueste Version.',
+        'update.checkFailed':       'Update-Prüfung fehlgeschlagen.',
     },
     fr: {
         'tab.participants':         'Participants',
@@ -141,6 +145,10 @@ export const TRANSLATIONS = {
         'about.line1':              'Ce logiciel est gratuit et open source – développé pour la Société de Tir suisse.',
         'about.line2':              'Contribuer, signaler un bug ou proposer une idée :',
         'about.linkLabel':          'Projet sur GitHub',
+        'btn.checkUpdate':          'Vérifier les mises à jour',
+        'update.confirmNow':        'Une nouvelle version est disponible. Mettre à jour maintenant ?\n\nAnnuler pour redemander dans 2 jours.',
+        'update.upToDate':          'Vous utilisez déjà la dernière version.',
+        'update.checkFailed':       'La vérification des mises à jour a échoué.',
     },
 };
 
@@ -251,6 +259,14 @@ export const detectSeparator = (line) => {
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] || ';';
 };
+
+// -----------------------------------------------------------------------------
+// Update prompt scheduling
+// -----------------------------------------------------------------------------
+
+export const computeDeferUntil = (nowMs, days) => nowMs + days * 24 * 60 * 60 * 1000;
+
+export const isUpdatePromptDue = (deferUntilMs, nowMs) => !deferUntilMs || nowMs >= deferUntilMs;
 
 // fields = [{ key, aliases?, currentHeader? }]
 export const matchHeaderKey = (header, fields) => {

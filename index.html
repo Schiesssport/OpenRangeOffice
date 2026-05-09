@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>RangeOffice</title>
+    <title>Standbüro</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <meta name="theme-color" content="#2563eb">
@@ -131,6 +131,7 @@
             <input type="file" id="import-file-input" hidden accept=".rangeoffice" onchange="Backup.import(this)">
             <button class="btn-neutral" onclick="document.getElementById('import-csv-input').click()" data-i18n="btn.importCsv">Import CSV</button>
             <input type="file" id="import-csv-input" hidden accept=".csv,text/csv" onchange="CsvIO.import(this)">
+            <button class="btn-neutral" onclick="Updates.checkNow()" data-i18n="btn.checkUpdate">Check for updates</button>
             <button class="btn-danger-ghost clear-all" onclick="Backup.clearAll()" data-i18n="btn.clearAll">Clear all data</button>
         </div>
 

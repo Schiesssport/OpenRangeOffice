@@ -30,7 +30,8 @@ Two-layer split, deliberately strict:
 | Layer | File | Allowed to touch |
 |---|---|---|
 | Pure logic | `core.js` | Plain JS only — no DOM, no `localStorage`, no `window`, no `document`. Exported as ES modules. |
-| App layer | `app.js` | DOM, `localStorage`, `JsBarcode`, service worker. Imports from `core.js`. Organised as `class` modules (`Translations`, `Settings`, `Logo`, `Tabs`, `Categories`, `Barcode`, `Participants`, `Selection`, `Filter`, `Toolbar`, `CsvIO`, `Printing`, `Backup`, `Migrations`). |
+| App layer | `app.js` | DOM, `localStorage`, `JsBarcode`. Imports from `core.js`. Organised as `class` modules (`Migrations`, `UserSettings`, `Translations`, `Settings`, `Logo`, `Tabs`, `Categories`, `Barcodes`, `Participants`, `Selection`, `Filter`, `Toolbar`, `CsvIO`, `Printing`, `Backup`, `Updates`, `App`). |
+| Service worker | `sw.js` | Standalone offline cache + `SKIP_WAITING` message handler. `app.js` registers it and drives the user-facing update prompt via the `Updates` class. |
 
 Anything that can be tested without a browser belongs in `core.js`. Tests in `tests.js` import from `core.js` directly via Node's built-in test runner.
 
@@ -40,7 +41,7 @@ The HTML uses inline `onclick="Module.method()"` handlers wired to those classes
 
 When adding columns, settings, or translations, extend the existing schema rather than scattering new lookups:
 
-- **Participant columns** → `PARTICIPANT_FIELDS` in `app.js` (`Participants` class). One entry covers: storage key, CSS class, type, placeholder, header, alias list (for CSV import), optional visibility predicate, optional dynamic header getter. Row HTML, CSV export, CSV import, column visibility, and `refreshDynamicTexts` all derive from it.
+- **Participant columns** → `Participants.FIELDS` in `app.js`. One entry covers: storage key, CSS class, type, placeholder key (or literal placeholder), header key (or dynamic `getHeader`), alias list (for CSV import), optional `col` data attribute, optional visibility predicate. Row HTML, CSV export, CSV import, column visibility, and `refreshDynamicTexts` all derive from it.
 - **Settings fields** → `Settings.BINDINGS`. One entry covers storage key, element id, type (`text` | `checkbox`), default value. Load/save/get all use it.
 - **Translations** → `TRANSLATIONS` in `core.js` (`de` and `fr` dictionaries). Use `data-i18n="key"` and `data-i18n-placeholder="key"` in HTML. For dynamic text in JS, call `Translations.t('key', { params })`. `{name}` style placeholders are substituted by `translate()`.
 - **Backup format versions** → `Backup.SETTINGS_VERSION`, `Backup.PARTICIPANTS_VERSION` (both `Major.Minor`). Bump the major when the shape changes incompatibly; bump the minor for additive changes.
@@ -64,7 +65,7 @@ Imported `.rangeoffice` files are version-checked per section. Mismatched majors
 
 - `settings` — `{ version: "1.0", data: { eventName, participantPrefix, programPrefix, rankingCode, targetCode, licenseEnabled, customColumn1Name, customColumn2Name, eventLogo } }`
 - `participants` — `{ version: "1.0", items: [ {license, lastName, firstName, yearOfBirth, custom1, custom2}, ... ] }`
-- `userSettings` — `{ language: "de" }` — local-only user prefs, **not** exported
+- `userSettings` — `{ language: "de", updateDeferUntil: 0 }` — local-only user prefs, **not** exported (free-form bag, extend via `UserSettings.patch`)
 
 The exported `.rangeoffice` envelope is just the first two:
 
