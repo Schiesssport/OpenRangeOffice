@@ -14,6 +14,8 @@ Diese Software ist kostenlos und Open Source – entwickelt für die Schweizer S
 
 ## Technical overview
 
+> **Coding agents:** must absorb [`AGENTS.md`](AGENTS.md) before any code — it is the operational contract for this repository (architecture, conventions, storage shape, git rules, post-change checklist).
+
 A small offline-first web app for managing shooting-event participants and printing barcoded score sheets ("Standblätter") for Swiss shooting events.
 
 Built as a single-page PWA with no build step and no external runtime dependencies — open `index.html` (served over `http://localhost` or `https://`) and it works.
@@ -71,17 +73,15 @@ Two Code128 barcodes per label, both with a `mod-97` (`-3n mod 97`) checksum:
 
 ## Storage
 
-Everything is stored in `localStorage`:
+Three top-level `localStorage` keys, each a JSON-encoded versioned wrapper:
 
-| Key | Contents |
+| Key | Shape |
 |---|---|
-| `participants` | Participant rows (JSON array) |
-| `eventName`, `eventLogo` | Branding |
-| `participantPrefix`, `programPrefix`, `programBilling`, `programHits` | Barcode parts |
-| `licenseEnabled`, `customColumn1Name`, `customColumn2Name` | Column visibility |
-| `appLanguage` | UI language (`de` / `fr`) |
+| `settings`     | `{ version, data: { eventName, eventLogo, participantPrefix, programPrefix, rankingCode, targetCode, licenseEnabled, customColumn1Name, customColumn2Name } }` |
+| `participants` | `{ version, items: [ {license, lastName, firstName, yearOfBirth, custom1, custom2}, ... ] }` |
+| `userSettings` | `{ language }` — local user preferences, **not** part of an event export |
 
-A migration step transparently renames legacy keys from earlier versions on first load, so upgrading never loses data.
+The exported `.rangeoffice` file mirrors `settings` + `participants` exactly. Section versions are `Major.Minor`; an incompatible major aborts the import (a registry-based migration framework is in place for future major bumps).
 
 ## Running locally
 
