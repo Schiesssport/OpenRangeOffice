@@ -70,6 +70,7 @@ export const TRANSLATIONS = {
         'placeholder.columnName':   'Spaltenname (leer = ausblenden)',
         'confirm.deleteSelected':   'Markierte Teilnehmer wirklich löschen?',
         'confirm.deleteRow':        'Diesen Teilnehmer wirklich löschen?',
+        'msg.duplicateLicense':     'Diese Lizenznummer ist bereits in einer anderen Zeile erfasst.',
         'confirm.importOverwrite':  'ACHTUNG: Dies überschreibt alle aktuellen Daten. Fortfahren?',
         'msg.importIncompatible':   'Diese Sicherung stammt aus einer inkompatiblen Hauptversion ({section} v{version}). Import nicht möglich.',
         'msg.importFailed':         'Datei konnte nicht eingelesen werden.',
@@ -87,6 +88,24 @@ export const TRANSLATIONS = {
         'update.confirmNow':        'Eine neue Version ist verfügbar. Jetzt aktualisieren?\n\nAbbrechen, um in 2 Tagen erneut zu fragen.',
         'update.upToDate':          'Du verwendest bereits die neueste Version.',
         'update.checkFailed':       'Update-Prüfung fehlgeschlagen.',
+        'settings.licenseDb':           'Lizenz-Datenbank',
+        'settings.licenseDbDescription':'Optional: SSV-Lizenzliste importieren, um Namen und Jahrgang automatisch nachzuschlagen. Die Datenbank ist gerätelokal, wird beim Anlass-Export nicht mitgeschickt und bleibt auch beim Löschen aller Anlass-Daten erhalten.',
+        'btn.licenseDbImport':          'Datenbank importieren',
+        'btn.licenseDbClear':           'Datenbank löschen',
+        'msg.licenseDbStatusEmpty':     'Keine Datenbank geladen.',
+        'msg.licenseDbStatusLoaded':    '{count} Lizenzen geladen.',
+        'msg.licenseDbImported':        '{count} Lizenzen importiert.',
+        'msg.licenseDbImportFailed':    'Lizenz-Datenbank konnte nicht importiert werden.',
+        'confirm.licenseDbClear':       'Lizenz-Datenbank wirklich löschen?',
+        'btn.searchLicense':            'Lizenz nach Name suchen',
+        'btn.close':                    'Schliessen',
+        'dialog.licenseSearch.title':       'Lizenz suchen',
+        'dialog.licenseSearch.placeholder': 'Name oder Vorname (Leerzeichen = UND)…',
+        'dialog.licenseSearch.empty':       'Keine Lizenz-Datenbank importiert.',
+        'dialog.licenseSearch.noResults':   'Keine Treffer.',
+        'dialog.licenseSearch.col.license':  'Lizenz',
+        'dialog.licenseSearch.col.location': 'Ort',
+        'dialog.licenseSearch.col.club':     'Verein',
     },
     fr: {
         'tab.participants':         'Participants',
@@ -132,6 +151,7 @@ export const TRANSLATIONS = {
         'placeholder.columnName':   'Nom de colonne (vide = masquer)',
         'confirm.deleteSelected':   'Supprimer les participants sélectionnés ?',
         'confirm.deleteRow':        'Supprimer ce participant ?',
+        'msg.duplicateLicense':     'Ce numéro de licence est déjà saisi dans une autre ligne.',
         'confirm.importOverwrite':  'ATTENTION : ceci écrasera toutes les données actuelles. Continuer ?',
         'msg.importIncompatible':   'Cette sauvegarde provient d’une version majeure incompatible ({section} v{version}). Import impossible.',
         'msg.importFailed':         'Le fichier n’a pas pu être lu.',
@@ -149,6 +169,24 @@ export const TRANSLATIONS = {
         'update.confirmNow':        'Une nouvelle version est disponible. Mettre à jour maintenant ?\n\nAnnuler pour redemander dans 2 jours.',
         'update.upToDate':          'Vous utilisez déjà la dernière version.',
         'update.checkFailed':       'La vérification des mises à jour a échoué.',
+        'settings.licenseDb':           'Base de licences',
+        'settings.licenseDbDescription':'Optionnel : importer la liste des licences SSV pour rechercher automatiquement les noms et l’année de naissance. La base reste locale sur l’appareil, n’est pas incluse dans l’export d’une manifestation et survit à l’effacement complet des données.',
+        'btn.licenseDbImport':          'Importer la base',
+        'btn.licenseDbClear':           'Supprimer la base',
+        'msg.licenseDbStatusEmpty':     'Aucune base chargée.',
+        'msg.licenseDbStatusLoaded':    '{count} licences chargées.',
+        'msg.licenseDbImported':        '{count} licences importées.',
+        'msg.licenseDbImportFailed':    'Échec de l’importation de la base de licences.',
+        'confirm.licenseDbClear':       'Supprimer la base de licences ?',
+        'btn.searchLicense':            'Rechercher une licence par nom',
+        'btn.close':                    'Fermer',
+        'dialog.licenseSearch.title':       'Rechercher une licence',
+        'dialog.licenseSearch.placeholder': 'Nom ou prénom (espace = ET)…',
+        'dialog.licenseSearch.empty':       'Aucune base de licences importée.',
+        'dialog.licenseSearch.noResults':   'Aucun résultat.',
+        'dialog.licenseSearch.col.license':  'Licence',
+        'dialog.licenseSearch.col.location': 'Lieu',
+        'dialog.licenseSearch.col.club':     'Société',
     },
 };
 
@@ -258,6 +296,34 @@ export const detectSeparator = (line) => {
         else if (!inQ && counts[ch] !== undefined) counts[ch]++;
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] || ';';
+};
+
+// -----------------------------------------------------------------------------
+// License normalisation (used for both lookup keys and runtime queries)
+// -----------------------------------------------------------------------------
+
+export const normalizeLicense = (raw) => {
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    return digits ? digits.padStart(6, '0') : '';
+};
+
+export const parseSwissDateYear = (dateString) => {
+    const match = String(dateString ?? '').match(/(\d{4})\s*$/);
+    return match ? match[1] : '';
+};
+
+export const findDuplicateLicense = (candidate, others) => {
+    const target = normalizeLicense(candidate);
+    if (!target) return false;
+    return others.some(other => normalizeLicense(other) === target);
+};
+
+export const tokenizeQuery = (query) =>
+    String(query ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+export const recordMatchesTerms = (record, terms) => {
+    const haystack = `${record.lastName ?? ''} ${record.firstName ?? ''}`.toLowerCase();
+    return terms.every(term => haystack.includes(String(term).toLowerCase()));
 };
 
 // -----------------------------------------------------------------------------

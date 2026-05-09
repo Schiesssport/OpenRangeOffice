@@ -18,6 +18,11 @@ import {
     matchHeaderKey,
     computeDeferUntil,
     isUpdatePromptDue,
+    normalizeLicense,
+    parseSwissDateYear,
+    tokenizeQuery,
+    recordMatchesTerms,
+    findDuplicateLicense,
 } from './core.js';
 
 const $  = (id) => document.getElementById(id);
@@ -28,6 +33,17 @@ const triggerDownload = (filename, blob) => {
     a.href = URL.createObjectURL(blob);
     a.download = filename;
     a.click();
+};
+
+// CSVs from Swiss tooling are often Windows-1252, not UTF-8. Try strict UTF-8
+// first; on a decode error, fall back to Windows-1252 (a Latin1 superset).
+const readTextFile = async (file) => {
+    const buffer = await file.arrayBuffer();
+    try {
+        return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    } catch (_) {
+        return new TextDecoder('windows-1252').decode(buffer);
+    }
 };
 
 // -----------------------------------------------------------------------------
@@ -99,6 +115,7 @@ class Translations {
         document.documentElement.lang = Translations.getLanguage();
         $$('[data-i18n]').forEach(el => { el.textContent = Translations.t(el.dataset.i18n); });
         $$('[data-i18n-placeholder]').forEach(el => { el.placeholder = Translations.t(el.dataset.i18nPlaceholder); });
+        $$('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', Translations.t(el.dataset.i18nAria)); });
     }
 
     static set(lang) {
@@ -106,6 +123,7 @@ class Translations {
         UserSettings.patch({ language: lang });
         Translations.apply();
         Participants.refreshDynamicTexts();
+        LicenseDb.refreshStatus();
     }
 }
 
@@ -376,15 +394,29 @@ class Participants {
         });
     }
 
+    static ON_CHANGE = {
+        yearOfBirth: 'Categories.expandYob(this)',
+        license:     'Participants.lookupLicense(this)',
+    };
+
     static buildRowHtml(data) {
+        const searchLabel = escapeHtml(Translations.t('btn.searchLicense'));
         const cells = Participants.FIELDS.map(f => {
             const value       = escapeHtml(data[f.key] || '');
             const placeholder = escapeHtml(f.placeholderKey ? Translations.t(f.placeholderKey) : (f.placeholder || ''));
             const colAttr     = f.col ? ` data-col="${f.col}"` : '';
-            const yobExtras   = f.key === 'yearOfBirth' ? ' onchange="Categories.expandYob(this)"' : '';
-            const input       = `<input type="${f.type}" class="${f.cls}" value="${value}" placeholder="${placeholder}" oninput="Participants.onInput(this)"${yobExtras}>`;
+            const onChange    = Participants.ON_CHANGE[f.key];
+            const changeAttr  = onChange ? ` onchange="${onChange}"` : '';
+            const input       = `<input type="${f.type}" class="${f.cls}" value="${value}" placeholder="${placeholder}" oninput="Participants.onInput(this)"${changeAttr}>`;
             if (f.key === 'yearOfBirth') {
                 return `<td${colAttr}><div class="yob-cell">${input}<span class="cat-badge"></span></div></td>`;
+            }
+            if (f.key === 'license') {
+                const hasLicense = (data.license || '').trim() !== '';
+                const lensEnabled = LicenseDb.recordCount > 0 && !hasLicense;
+                const disabledAttr = lensEnabled ? '' : ' disabled';
+                const lens = `<button type="button" class="license-search-btn" tabindex="-1" title="${searchLabel}" aria-label="${searchLabel}" onclick="LicenseDb.openSearch(this)"${disabledAttr}>🔍</button>`;
+                return `<td${colAttr}><div class="license-cell">${lens}${input}</div></td>`;
             }
             return `<td${colAttr}>${input}</td>`;
         }).join('');
@@ -409,8 +441,21 @@ class Participants {
         return tr;
     }
 
+    static updateLensState(tr) {
+        const lens = tr?.querySelector('.license-search-btn');
+        if (!lens) return;
+        const licenseInput = tr.querySelector('.field-license');
+        const hasLicense = !!(licenseInput && licenseInput.value.trim());
+        lens.disabled = hasLicense || LicenseDb.recordCount === 0;
+    }
+
     static onInput(inputEl) {
         const tr = inputEl.closest('tr');
+        if (inputEl.classList.contains('field-license')) {
+            const cleaned = inputEl.value.replace(/\s+/g, '');
+            if (cleaned !== inputEl.value) inputEl.value = cleaned;
+            Participants.updateLensState(tr);
+        }
         if (inputEl.classList.contains('field-lastname')) {
             if (inputEl.value.trim() !== '') {
                 tr.classList.remove('empty-row');
@@ -422,6 +467,43 @@ class Participants {
         if (inputEl.classList.contains('field-yob')) {
             Categories.updateBadge(tr);
         }
+        Participants.handleChanged();
+    }
+
+    static otherRowLicenses(currentRow) {
+        return [...$$('#participants-tbody tr')]
+            .filter(tr => tr !== currentRow)
+            .map(tr => tr.querySelector('.field-license')?.value || '')
+            .filter(Boolean);
+    }
+
+    static async lookupLicense(inputEl) {
+        const tr = inputEl.closest('tr');
+        if (!tr) return;
+        const license = inputEl.value.trim();
+        if (!license) return;
+
+        if (findDuplicateLicense(license, Participants.otherRowLicenses(tr))) {
+            alert(Translations.t('msg.duplicateLicense'));
+            inputEl.focus();
+            inputEl.select();
+            return;
+        }
+
+        const last  = tr.querySelector('.field-lastname').value.trim();
+        const first = tr.querySelector('.field-firstname').value.trim();
+        const yob   = tr.querySelector('.field-yob').value.trim();
+        if (last || first || yob) return;
+
+        const record = await LicenseDb.find(license);
+        if (!record) return;
+
+        tr.querySelector('.field-lastname').value  = record.lastName;
+        tr.querySelector('.field-firstname').value = record.firstName;
+        tr.querySelector('.field-yob').value       = record.yearOfBirth;
+        tr.classList.remove('empty-row');
+        if (!tr.nextElementSibling) Participants.addRow();
+        Categories.updateBadge(tr);
         Participants.handleChanged();
     }
 
@@ -475,6 +557,10 @@ class Participants {
         $$('#participants-tbody [data-row-action="print"]').forEach(btn => {
             btn.title = Translations.t('btn.print');
             btn.setAttribute('aria-label', Translations.t('btn.print'));
+        });
+        $$('#participants-tbody .license-search-btn').forEach(btn => {
+            btn.title = Translations.t('btn.searchLicense');
+            btn.setAttribute('aria-label', Translations.t('btn.searchLicense'));
         });
         Categories.updateAll();
         Toolbar.updateLabels();
@@ -617,43 +703,40 @@ class CsvIO {
         }));
     }
 
-    static import(input) {
+    static async import(input) {
         if (!input.files[0]) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                let text = e.target.result;
-                if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-                const firstLine = text.split(/\r?\n/, 1)[0];
-                const rows = parseCsv(text, detectSeparator(firstLine));
-                if (rows.length < 2) { input.value = ''; return; }
+        const file = input.files[0];
+        input.value = '';
+        try {
+            let text = await readTextFile(file);
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+            const firstLine = text.split(/\r?\n/, 1)[0];
+            const rows = parseCsv(text, detectSeparator(firstLine));
+            if (rows.length < 2) return;
 
-                const fields = CsvIO.fieldsForHeaderMatch();
-                const columnMap = rows[0].map(h => matchHeaderKey(h, fields));
+            const fields = CsvIO.fieldsForHeaderMatch();
+            const columnMap = rows[0].map(h => matchHeaderKey(h, fields));
 
-                const trailing = document.querySelector('#participants-tbody tr.empty-row');
-                if (trailing) trailing.remove();
+            const trailing = document.querySelector('#participants-tbody tr.empty-row');
+            if (trailing) trailing.remove();
 
-                let imported = 0;
-                for (let r = 1; r < rows.length; r++) {
-                    const data = {};
-                    columnMap.forEach((key, c) => {
-                        if (key) data[key] = (rows[r][c] ?? '').trim();
-                    });
-                    if (!data.lastName && !data.firstName) continue;
-                    Participants.addRow(data);
-                    imported++;
-                }
-
-                Participants.addRow(); // restore trailing empty row
-                Participants.handleChanged();
-                alert(Translations.t('msg.csvImported', { count: imported }));
-            } catch (_) {
-                alert(Translations.t('msg.csvImportFailed'));
+            let imported = 0;
+            for (let r = 1; r < rows.length; r++) {
+                const data = {};
+                columnMap.forEach((key, c) => {
+                    if (key) data[key] = (rows[r][c] ?? '').trim();
+                });
+                if (!data.lastName && !data.firstName) continue;
+                Participants.addRow(data);
+                imported++;
             }
-            input.value = '';
-        };
-        reader.readAsText(input.files[0], 'UTF-8');
+
+            Participants.addRow(); // restore trailing empty row
+            Participants.handleChanged();
+            alert(Translations.t('msg.csvImported', { count: imported }));
+        } catch (_) {
+            alert(Translations.t('msg.csvImportFailed'));
+        }
     }
 }
 
@@ -819,6 +902,252 @@ class Backup {
 }
 
 // -----------------------------------------------------------------------------
+// License lookup database — IndexedDB-backed, deliberately outside the event
+// envelope so the ~10MB SSV roster never bloats `.rangeoffice` exports.
+// -----------------------------------------------------------------------------
+
+class LicenseDb {
+    static DB_NAME = 'rangeoffice-licenses';
+    static STORE   = 'licenses';
+    static VERSION = 2;
+    static SEARCH_LIMIT  = 50;
+    static SEARCH_DEBOUNCE_MS = 150;
+
+    static REQUIRED_HEADERS = {
+        license:     'lizenznummer',
+        lastName:    'nachname',
+        firstName:   'vorname',
+        birthDate:   'geburtsdatum',
+        vereinsort:  'vereinsort',
+        vereinsname: 'vereinsname',
+    };
+
+    static recordCount  = 0;
+    static activeRow    = null;
+    static searchTimer  = null;
+    static searchSeq    = 0;
+
+    static open() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(LicenseDb.DB_NAME, LicenseDb.VERSION);
+            request.onupgradeneeded = (event) => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(LicenseDb.STORE)) {
+                    db.createObjectStore(LicenseDb.STORE, { keyPath: 'license' });
+                }
+                // Any version bump invalidates the cached roster; user re-imports.
+                event.target.transaction.objectStore(LicenseDb.STORE).clear();
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror   = () => reject(request.error);
+        });
+    }
+
+    static async count() {
+        try {
+            const db = await LicenseDb.open();
+            return await new Promise((resolve, reject) => {
+                const request = db.transaction(LicenseDb.STORE, 'readonly').objectStore(LicenseDb.STORE).count();
+                request.onsuccess = () => { resolve(request.result); db.close(); };
+                request.onerror   = () => { reject(request.error); db.close(); };
+            });
+        } catch (_) {
+            return 0;
+        }
+    }
+
+    static async find(rawLicense) {
+        const license = normalizeLicense(rawLicense);
+        if (!license) return null;
+        try {
+            const db = await LicenseDb.open();
+            return await new Promise((resolve, reject) => {
+                const request = db.transaction(LicenseDb.STORE, 'readonly').objectStore(LicenseDb.STORE).get(license);
+                request.onsuccess = () => { resolve(request.result || null); db.close(); };
+                request.onerror   = () => { reject(request.error); db.close(); };
+            });
+        } catch (_) {
+            return null;
+        }
+    }
+
+    static async clear() {
+        const db = await LicenseDb.open();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(LicenseDb.STORE, 'readwrite');
+            transaction.objectStore(LicenseDb.STORE).clear();
+            transaction.oncomplete = () => { resolve(); db.close(); };
+            transaction.onerror    = () => { reject(transaction.error); db.close(); };
+        });
+    }
+
+    static async importFromFile(file) {
+        let text = await readTextFile(file);
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const firstLine = text.split(/\r?\n/, 1)[0];
+        const rows = parseCsv(text, detectSeparator(firstLine));
+        if (rows.length < 2) return 0;
+
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const indexes = Object.fromEntries(
+            Object.entries(LicenseDb.REQUIRED_HEADERS).map(([key, header]) => [key, headers.indexOf(header)])
+        );
+        if (Object.values(indexes).some(i => i < 0)) {
+            throw new Error('missing required SSV headers');
+        }
+
+        const db = await LicenseDb.open();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(LicenseDb.STORE, 'readwrite');
+            const store = transaction.objectStore(LicenseDb.STORE);
+            store.clear();
+            let count = 0;
+            for (let r = 1; r < rows.length; r++) {
+                const row = rows[r];
+                const license = normalizeLicense(row[indexes.license]);
+                if (!license) continue;
+                store.put({
+                    license,
+                    lastName:    (row[indexes.lastName]    || '').trim(),
+                    firstName:   (row[indexes.firstName]   || '').trim(),
+                    yearOfBirth: parseSwissDateYear(row[indexes.birthDate]),
+                    vereinsort:  (row[indexes.vereinsort]  || '').trim(),
+                    vereinsname: (row[indexes.vereinsname] || '').trim(),
+                });
+                count++;
+            }
+            transaction.oncomplete = () => { resolve(count); db.close(); };
+            transaction.onerror    = () => { reject(transaction.error); db.close(); };
+        });
+    }
+
+    static async refreshStatus() {
+        const count = await LicenseDb.count();
+        LicenseDb.recordCount = count;
+        $$('#participants-tbody tr').forEach(tr => Participants.updateLensState(tr));
+        const status   = $('license-db-status');
+        const clearBtn = $('license-db-clear-button');
+        if (!status) return;
+        if (count > 0) {
+            status.textContent = Translations.t('msg.licenseDbStatusLoaded', { count });
+            if (clearBtn) clearBtn.style.display = '';
+        } else {
+            status.textContent = Translations.t('msg.licenseDbStatusEmpty');
+            if (clearBtn) clearBtn.style.display = 'none';
+        }
+    }
+
+    static async searchByName(query, limit = LicenseDb.SEARCH_LIMIT) {
+        const terms = tokenizeQuery(query);
+        if (terms.length === 0) return [];
+        let db;
+        try { db = await LicenseDb.open(); } catch (_) { return []; }
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(LicenseDb.STORE, 'readonly');
+            const cursorReq   = transaction.objectStore(LicenseDb.STORE).openCursor();
+            const results = [];
+            cursorReq.onsuccess = () => {
+                const cursor = cursorReq.result;
+                if (!cursor || results.length >= limit) {
+                    resolve(results);
+                    db.close();
+                    return;
+                }
+                if (recordMatchesTerms(cursor.value, terms)) results.push(cursor.value);
+                cursor.continue();
+            };
+            cursorReq.onerror = () => { reject(cursorReq.error); db.close(); };
+        });
+    }
+
+    static openSearch(triggerButton) {
+        LicenseDb.activeRow = triggerButton.closest('tr');
+        const dialog = $('license-search-dialog');
+        const input  = $('license-search-input');
+        const tbody  = $('license-search-results-body');
+        const empty  = $('license-search-empty');
+        input.value = '';
+        tbody.innerHTML = '';
+        if (LicenseDb.recordCount === 0) {
+            empty.textContent = Translations.t('dialog.licenseSearch.empty');
+            empty.classList.remove('hidden');
+            input.disabled = true;
+        } else {
+            empty.classList.add('hidden');
+            input.disabled = false;
+        }
+        dialog.showModal();
+        if (LicenseDb.recordCount > 0) input.focus();
+    }
+
+    static handleSearchInput() {
+        clearTimeout(LicenseDb.searchTimer);
+        LicenseDb.searchTimer = setTimeout(LicenseDb.runSearch, LicenseDb.SEARCH_DEBOUNCE_MS);
+    }
+
+    static async runSearch() {
+        const query = $('license-search-input').value;
+        const tbody = $('license-search-results-body');
+        const empty = $('license-search-empty');
+        if (!query.trim()) {
+            tbody.innerHTML = '';
+            empty.classList.add('hidden');
+            return;
+        }
+        const seq = ++LicenseDb.searchSeq;
+        const results = await LicenseDb.searchByName(query);
+        if (seq !== LicenseDb.searchSeq) return; // stale
+        tbody.innerHTML = results.map(r => `<tr data-license="${escapeHtml(r.license)}" onclick="LicenseDb.applySearchResult(this)">
+            <td>${escapeHtml(r.license)}</td>
+            <td>${escapeHtml(r.lastName)}</td>
+            <td>${escapeHtml(r.firstName)}</td>
+            <td>${escapeHtml(r.vereinsort  || '')}</td>
+            <td>${escapeHtml(r.vereinsname || '')}</td>
+        </tr>`).join('');
+        if (results.length === 0) {
+            empty.textContent = Translations.t('dialog.licenseSearch.noResults');
+            empty.classList.remove('hidden');
+        } else {
+            empty.classList.add('hidden');
+        }
+    }
+
+    static async applySearchResult(rowEl) {
+        const license = rowEl.dataset.license;
+        $('license-search-dialog').close();
+        if (!license || !LicenseDb.activeRow) return;
+        const tr = LicenseDb.activeRow;
+        LicenseDb.activeRow = null;
+        const licenseInput = tr.querySelector('.field-license');
+        if (!licenseInput) return;
+        licenseInput.value = license;
+        Participants.updateLensState(tr);
+        // Reuse the existing license → name/firstname/yob lookup so behaviour stays consistent.
+        await Participants.lookupLicense(licenseInput);
+    }
+
+    static async importViaInput(input) {
+        if (!input.files[0]) return;
+        const file = input.files[0];
+        input.value = '';
+        try {
+            const count = await LicenseDb.importFromFile(file);
+            await LicenseDb.refreshStatus();
+            alert(Translations.t('msg.licenseDbImported', { count }));
+        } catch (_) {
+            await LicenseDb.refreshStatus();
+            alert(Translations.t('msg.licenseDbImportFailed'));
+        }
+    }
+
+    static async clearWithConfirm() {
+        if (!confirm(Translations.t('confirm.licenseDbClear'))) return;
+        await LicenseDb.clear();
+        await LicenseDb.refreshStatus();
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Service worker registration + update prompt
 //
 // A waiting SW means the browser has fetched a new sw.js and installed it,
@@ -919,6 +1248,7 @@ class App {
         Participants.loadStored().forEach(Participants.addRow);
         Participants.addRow(); // trailing empty row
         Toolbar.updateLabels();
+        LicenseDb.refreshStatus();
 
         if (sessionStorage.getItem('openSettingsOnLoad')) {
             sessionStorage.removeItem('openSettingsOnLoad');
@@ -943,5 +1273,5 @@ document.addEventListener('DOMContentLoaded', App.init);
 // Expose classes for inline HTML handlers (onclick / oninput / onchange).
 Object.assign(window, {
     Translations, Settings, Logo, Tabs, Categories, Barcodes,
-    Participants, Selection, Filter, Toolbar, CsvIO, Backup, Printing, Updates,
+    Participants, Selection, Filter, Toolbar, CsvIO, Backup, Printing, Updates, LicenseDb,
 });

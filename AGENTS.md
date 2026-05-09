@@ -30,7 +30,7 @@ Two-layer split, deliberately strict:
 | Layer | File | Allowed to touch |
 |---|---|---|
 | Pure logic | `core.js` | Plain JS only — no DOM, no `localStorage`, no `window`, no `document`. Exported as ES modules. |
-| App layer | `app.js` | DOM, `localStorage`, `JsBarcode`. Imports from `core.js`. Organised as `class` modules (`Migrations`, `UserSettings`, `Translations`, `Settings`, `Logo`, `Tabs`, `Categories`, `Barcodes`, `Participants`, `Selection`, `Filter`, `Toolbar`, `CsvIO`, `Printing`, `Backup`, `Updates`, `App`). |
+| App layer | `app.js` | DOM, `localStorage`, `IndexedDB`, `JsBarcode`. Imports from `core.js`. Organised as `class` modules (`Migrations`, `UserSettings`, `Translations`, `Settings`, `Logo`, `Tabs`, `Categories`, `Barcodes`, `Participants`, `Selection`, `Filter`, `Toolbar`, `CsvIO`, `Printing`, `Backup`, `LicenseDb`, `Updates`, `App`). |
 | Service worker | `sw.js` | Standalone offline cache + `SKIP_WAITING` message handler. `app.js` registers it and drives the user-facing update prompt via the `Updates` class. |
 
 Anything that can be tested without a browser belongs in `core.js`. Tests in `tests.js` import from `core.js` directly via Node's built-in test runner.
@@ -66,6 +66,8 @@ Imported `.rangeoffice` files are version-checked per section. Mismatched majors
 - `settings` — `{ version: "1.0", data: { eventName, participantPrefix, programPrefix, rankingCode, targetCode, licenseEnabled, customColumn1Name, customColumn2Name, eventLogo } }`
 - `participants` — `{ version: "1.0", items: [ {license, lastName, firstName, yearOfBirth, custom1, custom2}, ... ] }`
 - `userSettings` — `{ language: "de", updateDeferUntil: 0 }` — local-only user prefs, **not** exported (free-form bag, extend via `UserSettings.patch`)
+
+The optional **SSV license roster** lives in IndexedDB (`rangeoffice-licenses` / store `licenses`, keyed by `normalizeLicense(...)` from `core.js`) — deliberately *outside* the event envelope so a 10MB roster never bloats `.rangeoffice` exports. Managed entirely by the `LicenseDb` class; `Backup.clearAll` does not touch it.
 
 The exported `.rangeoffice` envelope is just the first two:
 

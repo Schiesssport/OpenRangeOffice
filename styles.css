@@ -276,6 +276,38 @@ table.participants-table tbody input:focus {
     box-shadow: inset 0 -2px 0 var(--primary);
 }
 
+/* License cell: lens button + license input */
+.license-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.license-cell .field-license { flex: 1; min-width: 0; }
+
+.license-search-btn {
+    flex-shrink: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    font-size: 13px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.license-search-btn:hover:not(:disabled) {
+    color: var(--primary);
+    background: var(--neutral-bg);
+}
+.license-search-btn:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
 /* Year-of-birth cell: input + reserved badge slot */
 .yob-cell {
     display: flex;
@@ -385,6 +417,25 @@ tr.empty-row .row-actions { visibility: hidden; }
 
 .lang-bar select { width: auto; padding: 5px 8px; }
 
+.settings-section-description {
+    font-size: 12px;
+    color: var(--muted);
+    margin: -8px 0 14px;
+    line-height: 1.5;
+}
+
+.license-db-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.license-db-status {
+    font-size: 12px;
+    color: var(--muted);
+}
+
 .settings-footer {
     display: flex;
     gap: 10px;
@@ -406,6 +457,103 @@ tr.empty-row .row-actions { visibility: hidden; }
     text-decoration: none;
 }
 .settings-about a:hover { text-decoration: underline; }
+
+/* -- License search dialog -------------------------------------------------- */
+
+.license-search-dialog {
+    width: min(760px, 92vw);
+    max-height: 80vh;
+    border: 0;
+    border-radius: 10px;
+    padding: 0;
+    background: var(--card);
+    color: var(--text);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+.license-search-dialog::backdrop { background: rgba(17, 24, 39, 0.45); }
+
+.license-search-dialog .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    margin: 0;
+}
+.license-search-dialog .dialog-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.dialog-close-btn {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 16px;
+    border-radius: 6px;
+}
+.dialog-close-btn:hover { color: var(--text); background: var(--neutral-bg); }
+
+.dialog-body { padding: 16px 20px 20px; }
+
+#license-search-input {
+    width: 100%;
+    height: var(--btn-height);
+    margin-bottom: 12px;
+}
+
+.license-search-results {
+    max-height: 50vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.license-search-results table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.license-search-results thead th {
+    position: sticky;
+    top: 0;
+    background: var(--header-bg);
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border-strong);
+}
+
+.license-search-results tbody tr {
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+.license-search-results tbody tr:hover { background: var(--row-focus); }
+
+.license-search-results tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+}
+.license-search-results tbody tr:last-child td { border-bottom: 0; }
+
+.license-search-message {
+    text-align: center;
+    color: var(--muted);
+    padding: 20px;
+    margin: 0;
+    font-size: 13px;
+}
 
 /* -- Print preview & label layout ------------------------------------------ */
 

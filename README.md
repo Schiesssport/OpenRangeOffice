@@ -32,6 +32,7 @@ Built as a single-page PWA with no build step and no external runtime dependenci
   - CSV download (UTF-8 BOM, `;`-delimited — opens cleanly in Excel)
   - Excel-compatible copy to clipboard
   - Backup export/import (JSON, full state)
+  - Optional SSV licence-roster lookup: import once, then licence numbers auto-fill last name, first name, year of birth (stored in IndexedDB, never bundled into event exports)
 - **Score Sheet Printing**
   - Sheet per participant, two columns per sheet
   - Two Code128 barcodes per label (participant licence + event programme), each with a `mod-97` checksum

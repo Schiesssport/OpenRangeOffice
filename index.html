@@ -131,8 +131,26 @@
             <input type="file" id="import-file-input" hidden accept=".rangeoffice" onchange="Backup.import(this)">
             <button class="btn-neutral" onclick="document.getElementById('import-csv-input').click()" data-i18n="btn.importCsv">Import CSV</button>
             <input type="file" id="import-csv-input" hidden accept=".csv,text/csv" onchange="CsvIO.import(this)">
-            <button class="btn-neutral" onclick="Updates.checkNow()" data-i18n="btn.checkUpdate">Check for updates</button>
             <button class="btn-danger-ghost clear-all" onclick="Backup.clearAll()" data-i18n="btn.clearAll">Clear all data</button>
+        </div>
+
+        <hr>
+
+        <section class="settings-section">
+            <h3 data-i18n="settings.licenseDb">License database</h3>
+            <p class="settings-section-description" data-i18n="settings.licenseDbDescription"></p>
+            <div class="license-db-row">
+                <button class="btn-neutral" onclick="document.getElementById('license-db-input').click()" data-i18n="btn.licenseDbImport">Import database</button>
+                <input type="file" id="license-db-input" hidden accept=".csv,text/csv" onchange="LicenseDb.importViaInput(this)">
+                <button class="btn-danger-ghost" id="license-db-clear-button" onclick="LicenseDb.clearWithConfirm()" data-i18n="btn.licenseDbClear">Remove database</button>
+                <span class="license-db-status" id="license-db-status"></span>
+            </div>
+        </section>
+
+        <hr>
+
+        <div class="settings-footer">
+            <button class="btn-neutral" onclick="Updates.checkNow()" data-i18n="btn.checkUpdate">Check for updates</button>
         </div>
 
         <p class="settings-about">
@@ -144,6 +162,31 @@
 </div>
 
 <div id="print-container"></div>
+
+<dialog id="license-search-dialog" class="license-search-dialog">
+    <form method="dialog" class="dialog-header">
+        <h3 data-i18n="dialog.licenseSearch.title">Search license</h3>
+        <button class="dialog-close-btn" data-i18n-aria="btn.close" aria-label="Close">✕</button>
+    </form>
+    <div class="dialog-body">
+        <input type="search" id="license-search-input" oninput="LicenseDb.handleSearchInput()" data-i18n-placeholder="dialog.licenseSearch.placeholder">
+        <div class="license-search-results">
+            <table>
+                <thead>
+                    <tr>
+                        <th data-i18n="dialog.licenseSearch.col.license">License</th>
+                        <th data-i18n="col.lastName">Last name</th>
+                        <th data-i18n="col.firstName">First name</th>
+                        <th data-i18n="dialog.licenseSearch.col.location">Place</th>
+                        <th data-i18n="dialog.licenseSearch.col.club">Club</th>
+                    </tr>
+                </thead>
+                <tbody id="license-search-results-body"></tbody>
+            </table>
+            <p id="license-search-empty" class="license-search-message hidden"></p>
+        </div>
+    </div>
+</dialog>
 
 <script type="module" src="app.js"></script>
 </body>
