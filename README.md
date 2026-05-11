@@ -8,7 +8,7 @@ Die App läuft direkt im Browser und funktioniert auch **offline**, sobald sie e
 
 Unterstützte Sprachen: **Deutsch** und **Französisch** (umschaltbar in den Einstellungen).
 
-Diese Software ist kostenlos und Open Source – entwickelt für die Schweizer Schützenvereine. Bei Problemen, Wünschen oder zum Mithelfen: [Projekt auf GitHub](https://github.com/schiesssport/range-office).
+Diese Software ist kostenlos und Open Source – entwickelt für die Schweizer Schützenvereine. Bei Problemen, Wünschen oder zum Mithelfen: [Projekt auf GitHub](https://github.com/Schiesssport/OpenRangeOffice).
 
 ---
 
@@ -65,11 +65,11 @@ Two Code128 barcodes per label, both with a `mod-97` (`-3n mod 97`) checksum:
 |---|---|
 | `index.html` | Markup only; UI structure and `data-i18n` hooks |
 | `styles.css` | All styling, including the print stylesheet for the label sheets |
-| `app.js` | Application logic (translations, settings, table, barcode, print, CSV, backup, update prompt) |
-| `core.js` | Pure logic shared by app and tests (translations, schema, barcode helpers) |
-| `tests.js` | Node test suite for `core.js` |
-| `sw.js` | Service worker — offline cache + `SKIP_WAITING` handler (bump `CACHE_NAME` to ship a new version) |
-| `JsBarcode.all.min.js` | Vendored barcode library (no CDN needed) |
+| `src/app.js` | Application logic (translations, settings, table, barcode, print, CSV, backup, update prompt) |
+| `src/core/*.js` | Pure-logic modules, imported into `app.js` as namespaces (`Escape`, `I18n`, `Ages`, `BarcodeCodec`, `Csv`, `Licenses`, `UpdateTime`) |
+| `src/tests/*.test.js` | Node test suite, one file per `src/core/*.js` module |
+| `src/vendor/JsBarcode.all.min.js` | Vendored barcode library (no CDN needed) |
+| `sw.js` | Service worker — offline cache + `SKIP_WAITING` handler (bump `CACHE_NAME` to ship a new version). Stays at repo root so its scope covers the whole site. |
 | `manifest.webmanifest` | PWA manifest |
 | `icon.svg` | App icon |
 
@@ -83,14 +83,15 @@ Three top-level `localStorage` keys, each a JSON-encoded versioned wrapper:
 | `participants` | `{ version, items: [ {license, lastName, firstName, yearOfBirth, custom1, custom2}, ... ] }` |
 | `userSettings` | `{ language, updateDeferUntil }` — local user preferences, **not** part of an event export |
 
-The exported `.rangeoffice` file mirrors `settings` + `participants` exactly. Section versions are `Major.Minor`; an incompatible major aborts the import (a registry-based migration framework is in place for future major bumps).
+The exported `.openrangeoffice` file mirrors `settings` + `participants` exactly. Section versions are `Major.Minor`; an incompatible major aborts the import (a registry-based migration framework is in place for future major bumps).
 
 ## Running locally
 
 The app needs to be served over `http://localhost` or `https://` for the service worker / PWA install to work.
 
 ```bash
-npm run serve
+npm run dev      # fast iteration: service worker uses network-first, edits show on reload
+npm run prod     # production simulation: cache-first, restart = "new release" (triggers update prompt)
 ```
 
 ## Browser support

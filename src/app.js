@@ -1,29 +1,17 @@
 // =============================================================================
-// RangeOffice — DOM/storage layer.
-// Pure logic lives in core.js (no DOM, unit-tested via tests.js).
+// OpenRangeOffice — DOM/storage layer.
+// Pure logic lives in src/core/*.js (no DOM, unit-tested under src/tests).
+// Each core module is imported as a namespace so call sites read like
+// `Escape.escapeHtml(...)`, mirroring the class-as-namespace style used below.
 // =============================================================================
 
-import {
-    escapeHtml,
-    escapeCsvField,
-    TRANSLATIONS,
-    DEFAULT_LANGUAGE,
-    translate,
-    getCategory,
-    expandTwoDigitYear,
-    buildProgramCode,
-    buildParticipantCode,
-    parseCsv,
-    detectSeparator,
-    matchHeaderKey,
-    computeDeferUntil,
-    isUpdatePromptDue,
-    normalizeLicense,
-    parseSwissDateYear,
-    tokenizeQuery,
-    recordMatchesTerms,
-    findDuplicateLicense,
-} from './core.js';
+import * as Escape       from './core/escape.js';
+import * as I18n         from './core/translations.js';
+import * as Ages         from './core/categories.js';
+import * as BarcodeCodec from './core/barcodes.js';
+import * as Csv          from './core/csv.js';
+import * as Licenses     from './core/licenses.js';
+import * as UpdateTime   from './core/updates.js';
 
 const $  = (id) => document.getElementById(id);
 const $$ = (selector, ctx = document) => ctx.querySelectorAll(selector);
@@ -103,12 +91,12 @@ class UserSettings {
 class Translations {
     static getLanguage() {
         const stored = UserSettings.read().language;
-        return TRANSLATIONS[stored] ? stored : DEFAULT_LANGUAGE;
+        return I18n.TRANSLATIONS[stored] ? stored : I18n.DEFAULT_LANGUAGE;
     }
 
     static t(key, params = {}) {
-        const dict = TRANSLATIONS[Translations.getLanguage()] || TRANSLATIONS[DEFAULT_LANGUAGE];
-        return translate(dict, key, params);
+        const dict = I18n.TRANSLATIONS[Translations.getLanguage()] || I18n.TRANSLATIONS[I18n.DEFAULT_LANGUAGE];
+        return I18n.translate(dict, key, params);
     }
 
     static apply() {
@@ -119,7 +107,7 @@ class Translations {
     }
 
     static set(lang) {
-        if (!TRANSLATIONS[lang]) return;
+        if (!I18n.TRANSLATIONS[lang]) return;
         UserSettings.patch({ language: lang });
         Translations.apply();
         Participants.refreshDynamicTexts();
@@ -255,7 +243,7 @@ class Tabs {
 class Categories {
     static currentYear() { return new Date().getFullYear(); }
 
-    static get(yob) { return getCategory(yob, Categories.currentYear()); }
+    static get(yob) { return Ages.getCategory(yob, Categories.currentYear()); }
 
     static updateBadge(rowEl) {
         const yobInput = rowEl.querySelector('.field-yob');
@@ -273,7 +261,7 @@ class Categories {
     }
 
     static expandYob(inputEl) {
-        const expanded = expandTwoDigitYear(inputEl.value.trim(), Categories.currentYear());
+        const expanded = Ages.expandTwoDigitYear(inputEl.value.trim(), Categories.currentYear());
         if (expanded === null) return;
         inputEl.value = expanded;
         Categories.updateBadge(inputEl.closest('tr'));
@@ -295,7 +283,7 @@ class Barcodes {
     }
 
     static programCode() {
-        return buildProgramCode({
+        return BarcodeCodec.buildProgramCode({
             prefix:  Settings.get('programPrefix'),
             ranking: Settings.get('rankingCode'),
             target:  Settings.get('targetCode'),
@@ -303,7 +291,7 @@ class Barcodes {
     }
 
     static participantCode(license) {
-        return buildParticipantCode({
+        return BarcodeCodec.buildParticipantCode({
             prefix:  Settings.get('participantPrefix'),
             license,
             enabled: Settings.get('licenseEnabled'),
@@ -325,7 +313,6 @@ class Participants {
             placeholderKey: 'placeholder.license',
             headerKey: 'col.licenseNumber',
             isVisible: () => Settings.get('licenseEnabled'),
-            aliases: ['license', 'licence', 'lizenz', 'lizenz-nr.', 'lizenz-nr', 'lizenznummer', 'n° de licence', 'no de licence'],
         },
         {
             key: 'lastName',
@@ -333,7 +320,6 @@ class Participants {
             type: 'text',
             placeholderKey: 'placeholder.lastName',
             headerKey: 'col.lastName',
-            aliases: ['lastname', 'nachname', 'name', 'nom', 'familienname'],
         },
         {
             key: 'firstName',
@@ -341,7 +327,6 @@ class Participants {
             type: 'text',
             placeholderKey: 'placeholder.firstName',
             headerKey: 'col.firstName',
-            aliases: ['firstname', 'vorname', 'prénom', 'prenom'],
         },
         {
             key: 'yearOfBirth',
@@ -349,7 +334,6 @@ class Participants {
             type: 'number',
             placeholder: '1990',
             headerKey: 'col.yearOfBirth',
-            aliases: ['yearofbirth', 'jahrgang', 'année de naissance', 'annee de naissance', 'jg', 'yob', 'geburtsjahr'],
         },
         {
             key: 'custom1',
@@ -400,10 +384,10 @@ class Participants {
     };
 
     static buildRowHtml(data) {
-        const searchLabel = escapeHtml(Translations.t('btn.searchLicense'));
+        const searchLabel = Escape.escapeHtml(Translations.t('btn.searchLicense'));
         const cells = Participants.FIELDS.map(f => {
-            const value       = escapeHtml(data[f.key] || '');
-            const placeholder = escapeHtml(f.placeholderKey ? Translations.t(f.placeholderKey) : (f.placeholder || ''));
+            const value       = Escape.escapeHtml(data[f.key] || '');
+            const placeholder = Escape.escapeHtml(f.placeholderKey ? Translations.t(f.placeholderKey) : (f.placeholder || ''));
             const colAttr     = f.col ? ` data-col="${f.col}"` : '';
             const onChange    = Participants.ON_CHANGE[f.key];
             const changeAttr  = onChange ? ` onchange="${onChange}"` : '';
@@ -421,7 +405,7 @@ class Participants {
             return `<td${colAttr}>${input}</td>`;
         }).join('');
 
-        const printLabel = escapeHtml(Translations.t('btn.print'));
+        const printLabel = Escape.escapeHtml(Translations.t('btn.print'));
         return `
             <td><input type="checkbox" class="row-check" tabindex="-1" onchange="Toolbar.updateLabels()"></td>
             ${cells}
@@ -439,6 +423,27 @@ class Participants {
         Categories.updateBadge(tr);
         Participants.applyColumnVisibility();
         return tr;
+    }
+
+    static writeRow(tr, data) {
+        Participants.FIELDS.forEach(f => {
+            const el = tr.querySelector('.' + f.cls);
+            if (!el) return;
+            el.value = (data[f.key] ?? '').toString();
+        });
+        tr.classList.toggle('empty-row', !(data.lastName ?? '').trim());
+        Categories.updateBadge(tr);
+        Participants.updateLensState(tr);
+    }
+
+    static findRowByLicense(license) {
+        const target = Licenses.normalizeLicense(license);
+        if (!target) return null;
+        for (const tr of $$('#participants-tbody tr')) {
+            const candidate = Licenses.normalizeLicense(tr.querySelector('.field-license')?.value || '');
+            if (candidate && candidate === target) return tr;
+        }
+        return null;
     }
 
     static updateLensState(tr) {
@@ -483,7 +488,7 @@ class Participants {
         const license = inputEl.value.trim();
         if (!license) return;
 
-        if (findDuplicateLicense(license, Participants.otherRowLicenses(tr))) {
+        if (Licenses.findDuplicateLicense(license, Participants.otherRowLicenses(tr))) {
             alert(Translations.t('msg.duplicateLicense'));
             inputEl.focus();
             inputEl.select();
@@ -647,7 +652,7 @@ class Toolbar {
         const count = selected.length > 0 ? String(selected.length) : Translations.t('count.all');
         Toolbar.BUTTONS.forEach(({ id, verbKey }) => {
             const btn = $(id);
-            if (btn) btn.innerHTML = `<span class="btn-count">${escapeHtml(count)}</span> ${escapeHtml(Translations.t(verbKey))}`;
+            if (btn) btn.innerHTML = `<span class="btn-count">${Escape.escapeHtml(count)}</span> ${Escape.escapeHtml(Translations.t(verbKey))}`;
         });
         Toolbar.updateMaster();
     }
@@ -662,11 +667,11 @@ class CsvIO {
         const cols = Participants.visibleColumns();
         const lines = [];
         if (includeHeader) {
-            lines.push(cols.map(f => escapeCsvField(Participants.fieldHeader(f), separator)).join(separator));
+            lines.push(cols.map(f => Escape.escapeCsvField(Participants.fieldHeader(f), separator)).join(separator));
         }
         rows.forEach(tr => {
             const data = Participants.readRow(tr);
-            lines.push(cols.map(f => escapeCsvField(data[f.key], separator)).join(separator));
+            lines.push(cols.map(f => Escape.escapeCsvField(data[f.key], separator)).join(separator));
         });
         return lines.join('\r\n');
     }
@@ -677,6 +682,21 @@ class CsvIO {
         const csv = '﻿' + CsvIO.buildDelimited(rows, ';');
         const filename = `${(Settings.get('eventName') || 'standblatt').replace(/\s+/g, '_')}.csv`;
         triggerDownload(filename, new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    }
+
+    static downloadTemplate() {
+        const separator = ';';
+        const cols = Participants.visibleColumns();
+        const samples = [
+            { lastName: 'Muster', firstName: 'Hans', yearOfBirth: '1990' },
+            { lastName: 'Modèle', firstName: 'Jean', yearOfBirth: '1985' },
+        ];
+        const lines = [
+            cols.map(f => Escape.escapeCsvField(Participants.fieldHeader(f), separator)).join(separator),
+            ...samples.map(s => cols.map(f => Escape.escapeCsvField(s[f.key] ?? '', separator)).join(separator)),
+        ];
+        const csv = '﻿' + lines.join('\r\n');
+        triggerDownload(`${Translations.t('template.filename')}.csv`, new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     }
 
     static async copy() {
@@ -695,14 +715,6 @@ class CsvIO {
         }
     }
 
-    static fieldsForHeaderMatch() {
-        return Participants.FIELDS.map(f => ({
-            key: f.key,
-            aliases: f.aliases,
-            currentHeader: f.getHeader ? f.getHeader() : null,
-        }));
-    }
-
     static async import(input) {
         if (!input.files[0]) return;
         const file = input.files[0];
@@ -711,29 +723,39 @@ class CsvIO {
             let text = await readTextFile(file);
             if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
             const firstLine = text.split(/\r?\n/, 1)[0];
-            const rows = parseCsv(text, detectSeparator(firstLine));
+            const rows = Csv.parseCsv(text, Csv.detectSeparator(firstLine));
             if (rows.length < 2) return;
 
-            const fields = CsvIO.fieldsForHeaderMatch();
-            const columnMap = rows[0].map(h => matchHeaderKey(h, fields));
+            // Column order matches the visible participant table — same shape
+            // that CsvIO.buildDelimited writes. The first row is always treated
+            // as a header and skipped; subsequent rows are positional.
+            const columns = Participants.visibleColumns();
 
             const trailing = document.querySelector('#participants-tbody tr.empty-row');
             if (trailing) trailing.remove();
 
-            let imported = 0;
+            let added = 0;
+            let updated = 0;
             for (let r = 1; r < rows.length; r++) {
                 const data = {};
-                columnMap.forEach((key, c) => {
-                    if (key) data[key] = (rows[r][c] ?? '').trim();
+                columns.forEach((field, c) => {
+                    data[field.key] = (rows[r][c] ?? '').trim();
                 });
                 if (!data.lastName && !data.firstName) continue;
-                Participants.addRow(data);
-                imported++;
+
+                const existing = Participants.findRowByLicense(data.license);
+                if (existing) {
+                    Participants.writeRow(existing, data);
+                    updated++;
+                } else {
+                    Participants.addRow(data);
+                    added++;
+                }
             }
 
             Participants.addRow(); // restore trailing empty row
             Participants.handleChanged();
-            alert(Translations.t('msg.csvImported', { count: imported }));
+            alert(Translations.t('msg.csvImported', { added, updated }));
         } catch (_) {
             alert(Translations.t('msg.csvImportFailed'));
         }
@@ -752,10 +774,10 @@ class Printing {
             : '';
         const info = `
             <div class="label-info">
-                <div class="label-row label-bold">${escapeHtml(participant.lastName)} ${escapeHtml(participant.firstName)}</div>
-                <div class="label-row">${escapeHtml(yobLine)}</div>
+                <div class="label-row label-bold">${Escape.escapeHtml(participant.lastName)} ${Escape.escapeHtml(participant.firstName)}</div>
+                <div class="label-row">${Escape.escapeHtml(yobLine)}</div>
                 <hr>
-                <div class="label-event">${escapeHtml(eventName)}</div>
+                <div class="label-event">${Escape.escapeHtml(eventName)}</div>
                 ${logoHtml}
             </div>`;
         const partImg = participantImg ? `<img class="label-barcode-img" src="${participantImg}">` : '';
@@ -787,7 +809,7 @@ class Printing {
         const eventName = Settings.get('eventName');
         const logoUrl   = Settings.getRaw('eventLogo') || '';
         const logoHtml  = logoUrl
-            ? `<div class="label-logo"><img src="${escapeHtml(logoUrl)}" class="label-logo-img"></div>`
+            ? `<div class="label-logo"><img src="${Escape.escapeHtml(logoUrl)}" class="label-logo-img"></div>`
             : '';
         const programCode = Barcodes.programCode();
         const programImg  = programCode ? Barcodes.render(programCode) : null;
@@ -857,7 +879,7 @@ class Backup {
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');
         const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}-${pad(now.getMinutes())}`;
-        triggerDownload(`${slug}_${ts}.rangeoffice`, new Blob([JSON.stringify(data, null, 2)], { type: 'application/octet-stream' }));
+        triggerDownload(`${slug}_${ts}.openrangeoffice`, new Blob([JSON.stringify(data, null, 2)], { type: 'application/octet-stream' }));
     }
 
     static import(input) {
@@ -903,11 +925,11 @@ class Backup {
 
 // -----------------------------------------------------------------------------
 // License lookup database — IndexedDB-backed, deliberately outside the event
-// envelope so the ~10MB SSV roster never bloats `.rangeoffice` exports.
+// envelope so the ~10MB SSV roster never bloats `.openrangeoffice` exports.
 // -----------------------------------------------------------------------------
 
 class LicenseDb {
-    static DB_NAME = 'rangeoffice-licenses';
+    static DB_NAME = 'openrangeoffice-licenses';
     static STORE   = 'licenses';
     static VERSION = 2;
     static SEARCH_LIMIT  = 50;
@@ -957,7 +979,7 @@ class LicenseDb {
     }
 
     static async find(rawLicense) {
-        const license = normalizeLicense(rawLicense);
+        const license = Licenses.normalizeLicense(rawLicense);
         if (!license) return null;
         try {
             const db = await LicenseDb.open();
@@ -985,7 +1007,7 @@ class LicenseDb {
         let text = await readTextFile(file);
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const firstLine = text.split(/\r?\n/, 1)[0];
-        const rows = parseCsv(text, detectSeparator(firstLine));
+        const rows = Csv.parseCsv(text, Csv.detectSeparator(firstLine));
         if (rows.length < 2) return 0;
 
         const headers = rows[0].map(h => h.trim().toLowerCase());
@@ -1004,13 +1026,13 @@ class LicenseDb {
             let count = 0;
             for (let r = 1; r < rows.length; r++) {
                 const row = rows[r];
-                const license = normalizeLicense(row[indexes.license]);
+                const license = Licenses.normalizeLicense(row[indexes.license]);
                 if (!license) continue;
                 store.put({
                     license,
                     lastName:    (row[indexes.lastName]    || '').trim(),
                     firstName:   (row[indexes.firstName]   || '').trim(),
-                    yearOfBirth: parseSwissDateYear(row[indexes.birthDate]),
+                    yearOfBirth: Licenses.parseSwissDateYear(row[indexes.birthDate]),
                     vereinsort:  (row[indexes.vereinsort]  || '').trim(),
                     vereinsname: (row[indexes.vereinsname] || '').trim(),
                 });
@@ -1038,7 +1060,7 @@ class LicenseDb {
     }
 
     static async searchByName(query, limit = LicenseDb.SEARCH_LIMIT) {
-        const terms = tokenizeQuery(query);
+        const terms = Licenses.tokenizeQuery(query);
         if (terms.length === 0) return [];
         let db;
         try { db = await LicenseDb.open(); } catch (_) { return []; }
@@ -1053,7 +1075,7 @@ class LicenseDb {
                     db.close();
                     return;
                 }
-                if (recordMatchesTerms(cursor.value, terms)) results.push(cursor.value);
+                if (Licenses.recordMatchesTerms(cursor.value, terms)) results.push(cursor.value);
                 cursor.continue();
             };
             cursorReq.onerror = () => { reject(cursorReq.error); db.close(); };
@@ -1097,12 +1119,12 @@ class LicenseDb {
         const seq = ++LicenseDb.searchSeq;
         const results = await LicenseDb.searchByName(query);
         if (seq !== LicenseDb.searchSeq) return; // stale
-        tbody.innerHTML = results.map(r => `<tr data-license="${escapeHtml(r.license)}" onclick="LicenseDb.applySearchResult(this)">
-            <td>${escapeHtml(r.license)}</td>
-            <td>${escapeHtml(r.lastName)}</td>
-            <td>${escapeHtml(r.firstName)}</td>
-            <td>${escapeHtml(r.vereinsort  || '')}</td>
-            <td>${escapeHtml(r.vereinsname || '')}</td>
+        tbody.innerHTML = results.map(r => `<tr data-license="${Escape.escapeHtml(r.license)}" onclick="LicenseDb.applySearchResult(this)">
+            <td>${Escape.escapeHtml(r.license)}</td>
+            <td>${Escape.escapeHtml(r.lastName)}</td>
+            <td>${Escape.escapeHtml(r.firstName)}</td>
+            <td>${Escape.escapeHtml(r.vereinsort  || '')}</td>
+            <td>${Escape.escapeHtml(r.vereinsname || '')}</td>
         </tr>`).join('');
         if (results.length === 0) {
             empty.textContent = Translations.t('dialog.licenseSearch.noResults');
@@ -1158,16 +1180,16 @@ class LicenseDb {
 // -----------------------------------------------------------------------------
 
 class Updates {
-    static DEFER_DAYS = 2;
+    static DEFER_DAYS = 3;
     static promptOpen = false;
 
     static deferUpdates() {
-        UserSettings.patch({ updateDeferUntil: computeDeferUntil(Date.now(), Updates.DEFER_DAYS) });
+        UserSettings.patch({ updateDeferUntil: UpdateTime.computeDeferUntil(Date.now(), Updates.DEFER_DAYS) });
     }
 
     static promptAndApply(waitingWorker) {
         if (Updates.promptOpen) return;
-        if (!isUpdatePromptDue(UserSettings.read().updateDeferUntil, Date.now())) return;
+        if (!UpdateTime.isUpdatePromptDue(UserSettings.read().updateDeferUntil, Date.now())) return;
         Updates.promptOpen = true;
         try {
             if (confirm(Translations.t('update.confirmNow'))) {
@@ -1222,7 +1244,12 @@ class Updates {
 const registerServiceWorker = () => {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.register('sw.js')
-        .then((registration) => Updates.watch(registration))
+        .then((registration) => {
+            Updates.watch(registration);
+            // Force a fresh fetch of sw.js on every page load so the cache-first
+            // fetch handler doesn't keep us on a stale version indefinitely.
+            registration.update().catch(() => {});
+        })
         .catch(() => {});
 };
 

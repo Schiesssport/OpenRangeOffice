@@ -2,12 +2,12 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Standbüro</title>
+    <title>OpenRangeOffice</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <meta name="theme-color" content="#2563eb">
     <link rel="stylesheet" href="styles.css">
-    <script src="JsBarcode.all.min.js"></script>
+    <script src="src/vendor/JsBarcode.all.min.js"></script>
 </head>
 <body>
 
@@ -125,12 +125,22 @@
 
         <hr>
 
+        <section class="settings-section">
+            <h3 data-i18n="settings.importCsv">Participants list</h3>
+            <p class="settings-section-description" data-i18n="settings.importCsvDescription"></p>
+            <div class="license-db-row">
+                <button class="btn-neutral" onclick="CsvIO.downloadTemplate()" data-i18n="btn.exportTemplate">Download template</button>
+                <button class="btn-neutral" onclick="document.getElementById('import-csv-input').click()" data-i18n="btn.importCsv">Import participants list</button>
+                <input type="file" id="import-csv-input" hidden accept=".csv,text/csv" onchange="CsvIO.import(this)">
+            </div>
+        </section>
+
+        <hr>
+
         <div class="settings-footer">
             <button class="btn-secondary" onclick="Backup.export()" data-i18n="btn.exportBackup">Export event</button>
             <button class="btn-secondary" onclick="document.getElementById('import-file-input').click()" data-i18n="btn.importBackup">Import event</button>
-            <input type="file" id="import-file-input" hidden accept=".rangeoffice" onchange="Backup.import(this)">
-            <button class="btn-neutral" onclick="document.getElementById('import-csv-input').click()" data-i18n="btn.importCsv">Import CSV</button>
-            <input type="file" id="import-csv-input" hidden accept=".csv,text/csv" onchange="CsvIO.import(this)">
+            <input type="file" id="import-file-input" hidden accept=".openrangeoffice" onchange="Backup.import(this)">
             <button class="btn-danger-ghost clear-all" onclick="Backup.clearAll()" data-i18n="btn.clearAll">Clear all data</button>
         </div>
 
@@ -156,7 +166,7 @@
         <p class="settings-about">
             <span data-i18n="about.line1">This software is free and open source.</span>
             <span data-i18n="about.line2">Contribute, report bugs or share ideas:</span>
-            <a href="https://github.com/schiesssport/range-office" target="_blank" rel="noopener" data-i18n="about.linkLabel">Project on GitHub</a>
+            <a href="https://github.com/Schiesssport/OpenRangeOffice" target="_blank" rel="noopener" data-i18n="about.linkLabel">Project on GitHub</a>
         </p>
     </div>
 </div>
@@ -188,6 +198,6 @@
     </div>
 </dialog>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="src/app.js"></script>
 </body>
 </html>

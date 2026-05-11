@@ -1,9 +1,10 @@
 {
-  "name": "range-office",
+  "name": "open-range-office",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests.js",
-    "serve": "node serve.js"
+    "test": "node --test src/tests/*.test.js",
+    "dev":  "node serve.js",
+    "prod": "STAMP_CACHE=1 node serve.js"
   }
 }

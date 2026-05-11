@@ -1,32 +1,44 @@
 // =============================================================================
-// RangeOffice service worker.
+// OpenRangeOffice service worker.
 //
-// Network-first strategy: every GET tries the network first and only falls
-// back to the cache when offline (or the request fails). This means a normal
-// F5 always picks up the latest deployed version when online, while preserving
-// full offline functionality on a range with no connectivity.
+// Cache-first with stale-while-revalidate: every GET is served from the cache
+// immediately (no network wait — page loads stay snappy even on a flaky range
+// network), while a background fetch refreshes the cached entry for next time.
+// If a request misses the cache (e.g. a brand-new resource not in ASSETS), we
+// fall through to the network and only error out when both fail.
 //
-// The cache is still pre-warmed on install so the very first offline boot has
-// every asset available. Successful network responses replace the cached copy,
-// so the offline cache stays current as the user uses the app online.
+// Update delivery still goes through the SW lifecycle, not the fetch handler:
+// `app.js` calls `registration.update()` on every load, the browser fetches
+// this script, and a byte change triggers install (pre-warming a fresh cache
+// under the new CACHE_NAME). The `Updates` class in app.js then prompts the
+// user; accepting it posts SKIP_WAITING and reloads.
 //
-// CACHE_NAME bumps are still meaningful — they change this script's bytes
-// (which triggers the browser's SW update flow and the in-app update prompt)
-// and atomically swap to a freshly populated cache via install + activate.
-// Bump it whenever you ship a coordinated version that should land
-// immediately, even on offline-only clients.
+// CACHE_NAME is stamped at delivery time, never hand-edited:
+//   * GitHub Actions deploy stamps the release tag (see deploy.yml).
+//   * `npm run prod` stamps a startup timestamp so you can dry-run the
+//     production cache strategy locally.
+//   * `npm run dev` leaves the placeholder untouched. That literal value is
+//     also our signal for "this is development" — the fetch handler switches
+//     to network-first so reloads pick up edits immediately.
 // =============================================================================
 
-const CACHE_NAME = 'rangeoffice-v2';
+const CACHE_NAME = '__CACHE_VERSION__';
+const IS_DEV = CACHE_NAME === '__CACHE_VERSION__';
 const ASSETS = [
     './',
     'index.html',
-    'app.js',
-    'core.js',
     'styles.css',
-    'JsBarcode.all.min.js',
     'manifest.webmanifest',
     'icon.svg',
+    'src/app.js',
+    'src/core/escape.js',
+    'src/core/translations.js',
+    'src/core/categories.js',
+    'src/core/barcodes.js',
+    'src/core/csv.js',
+    'src/core/licenses.js',
+    'src/core/updates.js',
+    'src/vendor/JsBarcode.all.min.js',
 ];
 
 self.addEventListener('install', (event) => {
@@ -41,20 +53,33 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+const fetchAndCache = (request, cache) => fetch(request).then((response) => {
+    if (response && response.ok && new URL(request.url).origin === self.location.origin) {
+        cache.put(request, response.clone()).catch(() => {});
+    }
+    return response;
+}).catch(() => null);
+
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     event.respondWith((async () => {
         const cache = await caches.open(CACHE_NAME);
-        try {
-            const response = await fetch(event.request);
-            if (response && response.ok && new URL(event.request.url).origin === self.location.origin) {
-                cache.put(event.request, response.clone()).catch(() => {});
-            }
-            return response;
-        } catch (_) {
-            const cached = await cache.match(event.request);
-            return cached || new Response('', { status: 504, statusText: 'offline-no-cache' });
+        if (IS_DEV) {
+            // Network-first on localhost: reloads always pick up code edits,
+            // and we still fall back to the cache when the dev server is down
+            // so PWA offline behavior remains testable.
+            const fresh = await fetchAndCache(event.request, cache);
+            if (fresh) return fresh;
+            return (await cache.match(event.request)) || new Response('', { status: 504, statusText: 'offline-no-cache' });
         }
+        // Cache-first + stale-while-revalidate on deployed origins.
+        const cached = await cache.match(event.request);
+        const networkFetch = fetchAndCache(event.request, cache);
+        if (cached) {
+            event.waitUntil(networkFetch);
+            return cached;
+        }
+        return (await networkFetch) || new Response('', { status: 504, statusText: 'offline-no-cache' });
     })());
 });
 

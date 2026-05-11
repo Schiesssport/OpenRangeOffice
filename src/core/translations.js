@@ -1,29 +1,6 @@
 // =============================================================================
-// Pure helpers — no DOM, no localStorage. Safe to import from Node for tests.
+// Translation dictionaries and substitution helper.
 // =============================================================================
-
-// -----------------------------------------------------------------------------
-// String escaping
-// -----------------------------------------------------------------------------
-
-export const escapeHtml = (value) => String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-
-export const escapeCsvField = (value, separator) => {
-    const str = String(value ?? '');
-    if (str.includes(separator) || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-        return '"' + str.replaceAll('"', '""') + '"';
-    }
-    return str;
-};
-
-// -----------------------------------------------------------------------------
-// Translations
-// -----------------------------------------------------------------------------
 
 export const TRANSLATIONS = {
     de: {
@@ -38,8 +15,12 @@ export const TRANSLATIONS = {
         'placeholder.filter':       'Suchen…',
         'btn.exportBackup':         'Anlass exportieren',
         'btn.importBackup':         'Anlass importieren',
-        'btn.importCsv':            'CSV importieren',
-        'msg.csvImported':          '{count} Teilnehmer importiert.',
+        'btn.importCsv':            'Teilnehmerliste importieren',
+        'btn.exportTemplate':       'Vorlage herunterladen',
+        'settings.importCsv':       'Teilnehmerliste',
+        'settings.importCsvDescription': 'Teilnehmer aus einer CSV-Datei importieren. Die Spalten müssen in derselben Reihenfolge wie in der Teilnehmer-Tabelle stehen; die erste Zeile wird als Kopfzeile ignoriert. Die Vorlage enthält Kopfzeile und Beispieldaten zum Anpassen.',
+        'template.filename':        'teilnehmerliste-vorlage',
+        'msg.csvImported':          '{added} Teilnehmer hinzugefügt, {updated} aktualisiert.',
         'msg.csvImportFailed':      'CSV-Datei konnte nicht gelesen werden.',
         'btn.removeLogo':           'Entfernen',
         'btn.clearAll':             'Alle Daten löschen',
@@ -85,7 +66,7 @@ export const TRANSLATIONS = {
         'about.line2':              'Mithelfen, Fehler melden oder Ideen einbringen:',
         'about.linkLabel':          'Projekt auf GitHub',
         'btn.checkUpdate':          'Auf Updates prüfen',
-        'update.confirmNow':        'Eine neue Version ist verfügbar. Jetzt aktualisieren?\n\nAbbrechen, um in 2 Tagen erneut zu fragen.',
+        'update.confirmNow':        'Eine neue Version ist verfügbar. Jetzt aktualisieren?\n\nAbbrechen, um in 3 Tagen erneut zu fragen.',
         'update.upToDate':          'Du verwendest bereits die neueste Version.',
         'update.checkFailed':       'Update-Prüfung fehlgeschlagen.',
         'settings.licenseDb':           'Lizenz-Datenbank',
@@ -119,8 +100,12 @@ export const TRANSLATIONS = {
         'placeholder.filter':       'Rechercher…',
         'btn.exportBackup':         'Exporter manifestation',
         'btn.importBackup':         'Importer manifestation',
-        'btn.importCsv':            'Importer CSV',
-        'msg.csvImported':          '{count} participants importés.',
+        'btn.importCsv':            'Importer la liste des participants',
+        'btn.exportTemplate':       'Télécharger le modèle',
+        'settings.importCsv':       'Liste des participants',
+        'settings.importCsvDescription': 'Importer des participants depuis un fichier CSV. Les colonnes doivent être dans le même ordre que dans le tableau des participants ; la première ligne est ignorée comme en-tête. Le modèle fournit l’en-tête et des exemples à adapter.',
+        'template.filename':        'modele-liste-participants',
+        'msg.csvImported':          '{added} participants ajoutés, {updated} mis à jour.',
         'msg.csvImportFailed':      'Impossible de lire le fichier CSV.',
         'btn.removeLogo':           'Supprimer',
         'btn.clearAll':             'Effacer toutes les données',
@@ -166,7 +151,7 @@ export const TRANSLATIONS = {
         'about.line2':              'Contribuer, signaler un bug ou proposer une idée :',
         'about.linkLabel':          'Projet sur GitHub',
         'btn.checkUpdate':          'Vérifier les mises à jour',
-        'update.confirmNow':        'Une nouvelle version est disponible. Mettre à jour maintenant ?\n\nAnnuler pour redemander dans 2 jours.',
+        'update.confirmNow':        'Une nouvelle version est disponible. Mettre à jour maintenant ?\n\nAnnuler pour redemander dans 3 jours.',
         'update.upToDate':          'Vous utilisez déjà la dernière version.',
         'update.checkFailed':       'La vérification des mises à jour a échoué.',
         'settings.licenseDb':           'Base de licences',
@@ -198,148 +183,4 @@ export const translate = (dict, key, params = {}) => {
         str = str.replaceAll(`{${k}}`, v);
     }
     return str;
-};
-
-// -----------------------------------------------------------------------------
-// Categories
-// -----------------------------------------------------------------------------
-
-export const CATEGORY_RANGES = [
-    { code: 'JJ', minAge: 10, maxAge: 16 },
-    { code: 'J',  minAge: 17, maxAge: 20 },
-    { code: 'E',  minAge: 21, maxAge: 45 },
-    { code: 'S',  minAge: 46, maxAge: 59 },
-    { code: 'V',  minAge: 60, maxAge: 69 },
-    { code: 'SV', minAge: 70, maxAge: Infinity },
-];
-
-export const getCategory = (yearOfBirth, currentYear) => {
-    const year = parseInt(yearOfBirth, 10);
-    if (!year || year < 1900 || year > 2100) return null;
-    const age = currentYear - year;
-    const range = CATEGORY_RANGES.find(r => age >= r.minAge && age <= r.maxAge);
-    return range ? { code: range.code, age } : null;
-};
-
-export const expandTwoDigitYear = (raw, currentYear) => {
-    if (!/^\d{1,2}$/.test(raw)) return null;
-    const twoDigit = parseInt(raw, 10);
-    const pivot = currentYear % 100;
-    return (twoDigit <= pivot) ? 2000 + twoDigit : 1900 + twoDigit;
-};
-
-// -----------------------------------------------------------------------------
-// Barcodes
-// -----------------------------------------------------------------------------
-
-export const computeChecksum = (digits) => {
-    try {
-        const n = BigInt(digits.replace(/\D/g, ''));
-        let r = (n * -3n) % 97n;
-        if (r < 0n) r += 97n;
-        return r.toString().padStart(2, '0');
-    } catch (_) {
-        return '00';
-    }
-};
-
-export const buildProgramCode = ({ prefix, ranking, target }) => {
-    const r = (ranking || '').trim();
-    const t = (target || '').trim();
-    if (!r || !t) return null;
-    const p = (prefix || '').padStart(2, '0');
-    const base = p + r.padStart(3, '0') + t.padStart(3, '0');
-    return base + computeChecksum(base);
-};
-
-export const buildParticipantCode = ({ prefix, license, enabled }) => {
-    if (!enabled) return null;
-    const digits = (license || '').replace(/\D/g, '');
-    if (!digits) return null;
-    const base = (prefix || '') + digits.padStart(6, '0');
-    return base + computeChecksum(base);
-};
-
-// -----------------------------------------------------------------------------
-// CSV parsing
-// -----------------------------------------------------------------------------
-
-export const parseCsv = (text, separator) => {
-    const rows = [];
-    let row = [], field = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-        if (inQuotes) {
-            if (ch === '"') {
-                if (text[i + 1] === '"') { field += '"'; i++; }
-                else inQuotes = false;
-            } else field += ch;
-        } else if (ch === '"') {
-            inQuotes = true;
-        } else if (ch === separator) {
-            row.push(field); field = '';
-        } else if (ch === '\n') {
-            row.push(field); rows.push(row); row = []; field = '';
-        } else if (ch !== '\r') {
-            field += ch;
-        }
-    }
-    if (field || row.length) { row.push(field); rows.push(row); }
-    return rows.filter(r => r.some(c => c.trim() !== ''));
-};
-
-export const detectSeparator = (line) => {
-    const counts = { ';': 0, ',': 0, '\t': 0 };
-    let inQ = false;
-    for (const ch of line) {
-        if (ch === '"') inQ = !inQ;
-        else if (!inQ && counts[ch] !== undefined) counts[ch]++;
-    }
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] || ';';
-};
-
-// -----------------------------------------------------------------------------
-// License normalisation (used for both lookup keys and runtime queries)
-// -----------------------------------------------------------------------------
-
-export const normalizeLicense = (raw) => {
-    const digits = String(raw ?? '').replace(/\D/g, '');
-    return digits ? digits.padStart(6, '0') : '';
-};
-
-export const parseSwissDateYear = (dateString) => {
-    const match = String(dateString ?? '').match(/(\d{4})\s*$/);
-    return match ? match[1] : '';
-};
-
-export const findDuplicateLicense = (candidate, others) => {
-    const target = normalizeLicense(candidate);
-    if (!target) return false;
-    return others.some(other => normalizeLicense(other) === target);
-};
-
-export const tokenizeQuery = (query) =>
-    String(query ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-
-export const recordMatchesTerms = (record, terms) => {
-    const haystack = `${record.lastName ?? ''} ${record.firstName ?? ''}`.toLowerCase();
-    return terms.every(term => haystack.includes(String(term).toLowerCase()));
-};
-
-// -----------------------------------------------------------------------------
-// Update prompt scheduling
-// -----------------------------------------------------------------------------
-
-export const computeDeferUntil = (nowMs, days) => nowMs + days * 24 * 60 * 60 * 1000;
-
-export const isUpdatePromptDue = (deferUntilMs, nowMs) => !deferUntilMs || nowMs >= deferUntilMs;
-
-// fields = [{ key, aliases?, currentHeader? }]
-export const matchHeaderKey = (header, fields) => {
-    const norm = header.trim().toLowerCase();
-    for (const f of fields) {
-        if (f.aliases?.includes(norm)) return f.key;
-        if (f.currentHeader && f.currentHeader.toLowerCase() === norm) return f.key;
-    }
-    return null;
 };

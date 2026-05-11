@@ -1,6 +1,16 @@
 // =============================================================================
 // Tiny static file server — Node builtins only, runs fully offline.
-// Used by `npm run serve` for local development. PORT env var overrides 3000.
+//
+// Modes (selected by `npm run` script):
+//   `npm run dev`  — serves files raw. sw.js keeps the `__CACHE_VERSION__`
+//                    placeholder, which puts the service worker in network-
+//                    first mode so code edits show up on reload.
+//   `npm run prod` — sets STAMP_CACHE=1. The server intercepts sw.js and
+//                    substitutes the placeholder with a per-process timestamp,
+//                    making the SW behave exactly like a deployed release.
+//                    Restart the server to "ship" a new version locally.
+//
+// PORT env var overrides the default 3000.
 // =============================================================================
 
 import { createServer } from 'node:http';
@@ -10,6 +20,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url)).replace(/[\\/]+$/, '');
 const PORT = Number(process.env.PORT) || 3000;
+const STAMP_CACHE = process.env.STAMP_CACHE === '1';
+const CACHE_STAMP = `prod-${new Date().toISOString().replace(/[:.]/g, '-')}`;
 
 const MIME = {
     '.html':        'text/html; charset=utf-8',
@@ -21,6 +33,8 @@ const MIME = {
     '.ico':         'image/x-icon',
     '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
+
+const shouldStampServiceWorker = (requested) => STAMP_CACHE && requested === 'sw.js';
 
 createServer(async (req, res) => {
     const urlPath = decodeURIComponent(req.url.split('?')[0]);
@@ -34,7 +48,10 @@ createServer(async (req, res) => {
         return;
     }
     try {
-        const body = await readFile(filePath);
+        const raw = await readFile(filePath);
+        const body = shouldStampServiceWorker(requested)
+            ? Buffer.from(raw.toString('utf8').replace('__CACHE_VERSION__', CACHE_STAMP))
+            : raw;
         res.writeHead(200, {
             'Content-Type': MIME[extname(filePath).toLowerCase()] || 'application/octet-stream',
             'Cache-Control': 'no-store',
@@ -45,5 +62,6 @@ createServer(async (req, res) => {
         res.end('Not Found');
     }
 }).listen(PORT, () => {
-    console.log(`RangeOffice dev server: http://localhost:${PORT}`);
+    const mode = STAMP_CACHE ? `prod (cache stamp: ${CACHE_STAMP})` : 'dev';
+    console.log(`OpenRangeOffice ${mode} server: http://localhost:${PORT}`);
 });
