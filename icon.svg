@@ -1,19 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#007bff"/>
-  <g fill="#ffffff">
-    <rect x="96"  y="160" width="16" height="192"/>
-    <rect x="120" y="160" width="8"  height="192"/>
-    <rect x="140" y="160" width="24" height="192"/>
-    <rect x="172" y="160" width="8"  height="192"/>
-    <rect x="188" y="160" width="16" height="192"/>
-    <rect x="212" y="160" width="8"  height="192"/>
-    <rect x="228" y="160" width="32" height="192"/>
-    <rect x="268" y="160" width="8"  height="192"/>
-    <rect x="284" y="160" width="16" height="192"/>
-    <rect x="308" y="160" width="24" height="192"/>
-    <rect x="340" y="160" width="8"  height="192"/>
-    <rect x="356" y="160" width="16" height="192"/>
-    <rect x="380" y="160" width="8"  height="192"/>
-    <rect x="396" y="160" width="20" height="192"/>
+  <rect width="512" height="512" fill="#213F37"/>
+  <!-- App identity: the Code128 barcode, in paper -->
+  <g fill="#ECE9E0">
+    <rect x="96"  y="118" width="16" height="180"/>
+    <rect x="120" y="118" width="8"  height="180"/>
+    <rect x="140" y="118" width="24" height="180"/>
+    <rect x="172" y="118" width="8"  height="180"/>
+    <rect x="188" y="118" width="16" height="180"/>
+    <rect x="212" y="118" width="8"  height="180"/>
+    <rect x="228" y="118" width="32" height="180"/>
+    <rect x="268" y="118" width="8"  height="180"/>
+    <rect x="284" y="118" width="16" height="180"/>
+    <rect x="308" y="118" width="24" height="180"/>
+    <rect x="340" y="118" width="8"  height="180"/>
+    <rect x="356" y="118" width="16" height="180"/>
+    <rect x="380" y="118" width="8"  height="180"/>
+    <rect x="396" y="118" width="20" height="180"/>
   </g>
+  <!-- Family stamp: the Schiesssport target, tucked in the corner -->
+  <circle cx="390" cy="392" r="94" fill="#2f7d64"/>
+  <circle cx="390" cy="392" r="84" fill="#ECE9E0"/>
+  <g fill="none" stroke="#213F37" stroke-width="9">
+    <circle cx="390" cy="392" r="60"/>
+    <circle cx="390" cy="392" r="40"/>
+    <circle cx="390" cy="392" r="20"/>
+  </g>
+  <circle cx="390" cy="392" r="9" fill="#2f7d64"/>
 </svg>

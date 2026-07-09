@@ -3,26 +3,33 @@
    ============================================================================= */
 
 :root {
-    --primary:        #2563eb;
-    --primary-dark:   #1d4ed8;
-    --danger:         #dc2626;
-    --success:        #16a34a;
-    --black:          #111827;
-    --text:           #111827;
-    --muted:          #6b7280;
-    --border:         #e5e7eb;
-    --border-strong:  #d1d5db;
-    --row-hover:      #f9fafb;
-    --row-focus:      #eff6ff;
-    --bg:             #f3f4f6;
+    /* Schiesssport design system — forest chrome, emerald action, warm paper ground */
+    --forest:         #213F37;
+    --forest-2:       #2d5548;
+    --paper:          #ECE9E0;
+    --primary:        #2f7d64;
+    --primary-dark:   #25604e;
+    --danger:         #e74c3c;
+    --success:        #27ae60;
+    --warn:           #e67e22;
+    --black:          #213F37;
+    --text:           #222222;
+    --muted:          #6b6b63;
+    --border:         #ddd6c8;
+    --border-strong:  #c9c3b4;
+    --row-hover:      #e9f1ed;
+    --row-focus:      #e4ece8;
+    --bg:             #ECE9E0;
     --card:           #ffffff;
-    --header-bg:      #f9fafb;
+    --header-bg:      #213F37;
+    --font:           system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:           ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font);
     background: var(--bg);
     color: var(--text);
     padding: 24px;
@@ -52,7 +59,7 @@ body {
 
 .tab-btn {
     border: 1px solid var(--border);
-    background: #f3f4f6;
+    background: #e3dfd3;
     padding: 10px 22px;
     cursor: pointer;
     border-radius: 8px 8px 0 0;
@@ -64,19 +71,20 @@ body {
 .tab-btn.active {
     background: var(--card);
     border-bottom: 1px solid var(--card);
-    color: var(--primary);
+    color: var(--forest);
+    box-shadow: inset 0 2px 0 var(--primary);
 }
 
 /* -- Buttons ---------------------------------------------------------------- */
 
 :root {
     --btn-height:        34px;
-    --primary-hover:     #1d4ed8;
-    --danger-hover:      #b91c1c;
-    --success-hover:     #15803d;
-    --black-hover:       #1f2937;
-    --neutral-bg:        #f3f4f6;
-    --neutral-bg-hover:  #e5e7eb;
+    --primary-hover:     #25604e;
+    --danger-hover:      #c0392b;
+    --success-hover:     #1f8b4c;
+    --black-hover:       #2d5548;
+    --neutral-bg:        #eae7df;
+    --neutral-bg-hover:  #ddd8cc;
 }
 
 button {
@@ -114,7 +122,7 @@ button:focus-visible {
     color: var(--primary);
     border-color: var(--primary);
 }
-.btn-secondary:hover { background: #eff6ff; }
+.btn-secondary:hover { background: var(--row-focus); }
 
 /* Danger */
 .btn-danger {
@@ -197,7 +205,7 @@ input, select {
 input:focus, select:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+    box-shadow: 0 0 0 3px rgba(47,125,100,0.18);
 }
 
 input[type="checkbox"] {
@@ -229,10 +237,10 @@ table.participants-table thead th {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--muted);
+    color: rgba(255,255,255,0.88);
     font-weight: 600;
     padding: 10px 12px;
-    box-shadow: inset 0 -2px 0 var(--border-strong);
+    box-shadow: inset 0 -2px 0 var(--primary);
 }
 
 table.participants-table thead th:first-child { border-top-left-radius: 8px;  }
@@ -274,6 +282,13 @@ table.participants-table tbody input[type="number"] {
 table.participants-table tbody input:focus {
     background: var(--row-focus);
     box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+/* Numeric data columns use the monospace face — design system: mono for data */
+.field-license,
+.field-yob {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
 }
 
 /* License cell: lens button + license input */
@@ -476,15 +491,16 @@ tr.empty-row .row-actions { visibility: hidden; }
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    background: var(--forest);
+    border-bottom: 0;
     margin: 0;
 }
 .license-search-dialog .dialog-header h3 {
     margin: 0;
     font-size: 14px;
     font-weight: 700;
-    color: var(--primary);
+    color: #fff;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -492,14 +508,14 @@ tr.empty-row .row-actions { visibility: hidden; }
 .dialog-close-btn {
     border: 0;
     background: transparent;
-    color: var(--muted);
+    color: rgba(255,255,255,0.7);
     width: 28px;
     height: 28px;
     padding: 0;
     font-size: 16px;
     border-radius: 6px;
 }
-.dialog-close-btn:hover { color: var(--text); background: var(--neutral-bg); }
+.dialog-close-btn:hover { color: #fff; background: rgba(255,255,255,0.15); }
 
 .dialog-body { padding: 16px 20px 20px; }
 
@@ -530,9 +546,14 @@ tr.empty-row .row-actions { visibility: hidden; }
     padding: 8px 10px;
     font-size: 11px;
     text-transform: uppercase;
-    color: var(--muted);
+    color: rgba(255,255,255,0.88);
     letter-spacing: 0.04em;
-    border-bottom: 1px solid var(--border-strong);
+    border-bottom: 0;
+}
+
+.license-search-results tbody td:first-child {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .license-search-results tbody tr {
